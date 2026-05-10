@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retirement Calculator — 3-Bucket + FIA Strategy</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0b1220;
+  --bg2: #0f172a;
+  --panel: #1e293b;
+  --panel2: #273449;
+  --border: #334155;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-faint: #64748b;
+  --accent: #3b82f6;
+  --accent-dim: #1e40af;
+  --green: #10b981;
+  --yellow: #f59e0b;
+  --red: #ef4444;
+  --purple: #8b5cf6;
+  --b1: #06b6d4;
+  --b2: #8b5cf6;
+  --b3: #10b981;
+  --fia: #f59e0b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+h1 .accent { color: var(--accent); }
+
+.subtitle {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.panel h2 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section { margin-bottom: 18px; }
+.section:last-child { margin-bottom: 0; }
+
+.field {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.field label {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.field label .hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+input[type="number"], select {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  text-align: right;
+}
+
+input[type="number"]:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.field.check {
+  grid-template-columns: 24px 1fr;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 800px) {
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.metric {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.metric .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.metric .value {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.metric .sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+
+.metric.good .value { color: var(--green); }
+.metric.warn .value { color: var(--yellow); }
+.metric.bad .value { color: var(--red); }
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1300px) {
+  .charts-grid { grid-template-columns: 1fr; }
+}
+
+.chart-wrap {
+  position: relative;
+  height: 280px;
+}
+
+.chart-wrap.tall {
+  height: 320px;
+}
+
+.allocation-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.alloc-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 60px;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.alloc-row .name { color: var(--text-dim); }
+.alloc-row .bar-track {
+  height: 8px;
+  background: var(--bg2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.alloc-row .bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.alloc-row .pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.alloc-warn {
+  color: var(--yellow);
+  font-size: 12px;
+  margin-top: 8px;
+  display: none;
+}
+.alloc-warn.show { display: block; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+table th {
+  text-align: right;
+  padding: 8px 10px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  position: sticky;
+  top: 0;
+}
+
+table th:first-child, table td:first-child { text-align: left; }
+
+table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #1e293b;
+  color: var(--text);
+}
+
+table tr:hover td { background: rgba(59, 130, 246, 0.06); }
+
+.table-wrap {
+  max-height: 420px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.row-warn td { color: var(--yellow); }
+.row-bad td { color: var(--red); }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab:hover { color: var(--text); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.notes {
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 3px solid var(--accent);
+  padding: 12px 14px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.notes strong { color: var(--text); }
+
+.preset-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.preset-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.action-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.btn:hover { background: #2563eb; }
+
+.btn-secondary {
+  background: var(--panel2);
+}
+.btn-secondary:hover { background: #3b4a64; }
+
+.depleted-banner {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid var(--red);
+  color: #fca5a5;
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  display: none;
+}
+
+.depleted-banner.show { display: block; }
+
+.success-banner {
+  background: rgba(16, 185, 129, 0.10);
+  border: 1px solid var(--green);
+  color: #6ee7b7;
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  display: none;
+}
+
+.success-banner.show { display: block; }
+
+footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.7;
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <h1>Retirement Calculator <span class="accent">— 3-Bucket + FIA Strategy</span></h1>
+  <div class="subtitle">Year-by-year withdrawal simulation with healthcare gap modeling, SS phasing, and Fixed Indexed Annuity overlay.</div>
+</header>
+
+<div class="layout">
+
+  <!-- ============== INPUTS PANEL ============== -->
+  <aside>
+    <div class="panel">
+      <div class="action-bar">
+        <button class="btn" onclick="recalc()">Recalculate</button>
+        <button class="btn btn-secondary" onclick="findSustainable()">Solve Max Spend</button>
+      </div>
+
+      <div class="preset-row">
+        <button class="preset-btn" onclick="applyPreset('user')">Your Scenario</button>
+        <button class="preset-btn" onclick="applyPreset('conservative')">Conservative</button>
+        <button class="preset-btn" onclick="applyPreset('aggressive')">Growth-Tilted</button>
+        <button class="preset-btn" onclick="applyPreset('fia-heavy')">FIA-Heavy</button>
+      </div>
+
+      <div class="section">
+        <h2>Personal</h2>
+        <div class="field">
+          <label>Current age</label>
+          <input type="number" id="currentAge" value="55">
+        </div>
+        <div class="field">
+          <label>Retirement age</label>
+          <input type="number" id="retirementAge" value="55">
+        </div>
+        <div class="field">
+          <label>Plan to age <span class="hint">life expectancy</span></label>
+          <input type="number" id="lifeExpectancy" value="92">
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Assets</h2>
+        <div class="field">
+          <label>Liquid assets <span class="hint">401k, IRA, brokerage</span></label>
+          <input type="number" id="liquidAssets" value="800000" step="10000">
+        </div>
+        <div class="field">
+          <label>Physical assets <span class="hint">home equity, etc — excluded from withdrawal</span></label>
+          <input type="number" id="physicalAssets" value="200000" step="10000">
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Spending</h2>
+        <div class="field">
+          <label>Annual living expenses <span class="hint">today's dollars, ex-healthcare</span></label>
+          <input type="number" id="baseSpending" value="55000" step="1000">
+        </div>
+        <div class="field">
+          <label>Pre-65 healthcare <span class="hint">ACA / COBRA, annual</span></label>
+          <input type="number" id="preMedicareHealthcare" value="18000" step="500">
+        </div>
+        <div class="field">
+          <label>Medicare era <span class="hint">65+ annual cost</span></label>
+          <input type="number" id="medicareCost" value="12000" step="500">
+        </div>
+        <div class="field">
+          <label>Inflation %</label>
+          <input type="number" id="inflation" value="3.0" step="0.1">
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Social Security</h2>
+        <div class="field">
+          <label>Annual benefit</label>
+          <input type="number" id="ssAmount" value="36000" step="500">
+        </div>
+        <div class="field">
+          <label>Start age</label>
+          <input type="number" id="ssStartAge" value="62">
+        </div>
+        <div class="field">
+          <label>COLA %</label>
+          <input type="number" id="ssCola" value="2.5" step="0.1">
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>3-Bucket Allocation (% of liquid)</h2>
+        <div class="field">
+          <label><span style="color:var(--b1)">Bucket 1</span> Cash / MMF</label>
+          <input type="number" id="bucket1Pct" value="10" step="1">
+        </div>
+        <div class="field">
+          <label><span style="color:var(--b2)">Bucket 2</span> Bonds</label>
+          <input type="number" id="bucket2Pct" value="30" step="1">
+        </div>
+        <div class="field">
+          <label><span style="color:var(--b3)">Bucket 3</span> Stocks / Growth</label>
+          <input type="number" id="bucket3Pct" value="60" step="1">
+        </div>
+        <div class="field">
+          <label><span style="color:var(--fia)">FIA</span> Fixed Indexed Annuity</label>
+          <input type="number" id="fiaPct" value="0" step="1">
+        </div>
+        <div class="alloc-warn" id="allocWarn">⚠ Allocations should sum to 100%</div>
+      </div>
+
+      <div class="section">
+        <h2>Expected Returns %</h2>
+        <div class="field">
+          <label>Bucket 1 return</label>
+          <input type="number" id="bucket1Return" value="4.5" step="0.1">
+        </div>
+        <div class="field">
+          <label>Bucket 2 return</label>
+          <input type="number" id="bucket2Return" value="5.0" step="0.1">
+        </div>
+        <div class="field">
+          <label>Bucket 3 return</label>
+          <input type="number" id="bucket3Return" value="7.5" step="0.1">
+        </div>
+        <div class="field">
+          <label>FIA effective return <span class="hint">net of caps/spreads</span></label>
+          <input type="number" id="fiaReturn" value="5.0" step="0.1">
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>FIA Income Rider</h2>
+        <div class="field check">
+          <input type="checkbox" id="fiaIncomeRider">
+          <label>Enable lifetime income rider</label>
+        </div>
+        <div class="field">
+          <label>Income start age</label>
+          <input type="number" id="fiaIncomeStart" value="65">
+        </div>
+        <div class="field">
+          <label>Payout rate %</label>
+          <input type="number" id="fiaIncomeRate" value="5.5" step="0.1">
+        </div>
+        <div class="field">
+          <label>Roll-up rate % <span class="hint">income base growth pre-activation</span></label>
+          <input type="number" id="fiaRollup" value="6.0" step="0.1">
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Bucket Strategy</h2>
+        <div class="field">
+          <label>Bucket 1 target <span class="hint">years of expenses held</span></label>
+          <input type="number" id="bucket1Years" value="2" step="0.5">
+        </div>
+        <div class="field">
+          <label>Bucket 2 target <span class="hint">years of expenses held</span></label>
+          <input type="number" id="bucket2Years" value="5" step="0.5">
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============== RESULTS PANEL ============== -->
+  <main>
+    <div class="success-banner" id="successBanner"></div>
+    <div class="depleted-banner" id="depletedBanner"></div>
+
+    <!-- Summary metrics -->
+    <div class="summary-grid">
+      <div class="metric" id="metricSurvival">
+        <div class="label">Portfolio Survives To</div>
+        <div class="value">—</div>
+        <div class="sub"></div>
+      </div>
+      <div class="metric">
+        <div class="label">Initial Withdrawal Rate</div>
+        <div class="value" id="metricSWR">—</div>
+        <div class="sub" id="metricSWRsub">year 1 net of SS</div>
+      </div>
+      <div class="metric">
+        <div class="label">Total Lifetime Spending</div>
+        <div class="value" id="metricLifetime">—</div>
+        <div class="sub">today's dollars</div>
+      </div>
+      <div class="metric">
+        <div class="label">Ending Portfolio</div>
+        <div class="value" id="metricEnding">—</div>
+        <div class="sub" id="metricEndingSub">at plan end</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="panel" style="margin-bottom: 16px;">
+      <h2>Portfolio Trajectory</h2>
+      <div class="chart-wrap tall">
+        <canvas id="chartPortfolio"></canvas>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--b1)"></div>Bucket 1 — Cash</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--b2)"></div>Bucket 2 — Bonds</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--b3)"></div>Bucket 3 — Stocks</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--fia)"></div>FIA</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="panel">
+        <h2>Annual Income Sources</h2>
+        <div class="chart-wrap">
+          <canvas id="chartIncome"></canvas>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Spending vs Need</h2>
+        <div class="chart-wrap">
+          <canvas id="chartSpending"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Year-by-year table -->
+    <div class="panel" style="margin-top: 16px;">
+      <h2>Year-by-Year Detail</h2>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab(this, 'tab-summary')">Cash Flow</button>
+        <button class="tab" onclick="switchTab(this, 'tab-buckets')">Bucket Balances</button>
+      </div>
+      <div class="tab-content active" id="tab-summary">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Age</th>
+                <th>Living Exp</th>
+                <th>Healthcare</th>
+                <th>Total Need</th>
+                <th>SS</th>
+                <th>FIA Income</th>
+                <th>Withdrawal</th>
+                <th>Portfolio</th>
+              </tr>
+            </thead>
+            <tbody id="tableBodySummary"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="tab-content" id="tab-buckets">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Age</th>
+                <th>Bucket 1</th>
+                <th>Bucket 2</th>
+                <th>Bucket 3</th>
+                <th>FIA</th>
+                <th>Total</th>
+                <th>Real Total <span class="hint" style="font-size:9px;display:block;color:var(--text-faint)">infl-adj</span></th>
+              </tr>
+            </thead>
+            <tbody id="tableBodyBuckets"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <strong>Methodology.</strong> The 3-bucket strategy withdraws cash first (Bucket 1), then bonds (Bucket 2), then stocks (Bucket 3). After each year's growth, Bucket 1 is refilled from Bucket 2 toward the target years-of-expenses, and Bucket 2 is refilled from Bucket 3 similarly. This reduces sequence-of-returns risk by letting equities recover during downturns. The FIA bucket is modeled as a separate sleeve — when an income rider is enabled, the income base grows at the roll-up rate until activation age, then pays the payout rate as a guaranteed lifetime income stream (the underlying account value still draws down if withdrawals exceed it). Pre-65 healthcare assumes ACA / COBRA pricing; post-65 uses your Medicare estimate. Returns are deterministic — for sequence risk, run the FIA-Heavy preset to see how guaranteed-income flooring changes survival.
+    </div>
+  </main>
+</div>
+
+<footer>
+  Educational tool — not financial advice. Actual outcomes depend on market sequence, tax structure (Roth vs traditional), state tax (TX vs MA matters), Medicare IRMAA brackets if income is high, and unmodeled events (LTC, market crashes, divorce, family support). Always validate against Monte Carlo simulators (e.g., FIRECalc, cFIREsim) and a fee-only fiduciary CFP before acting. Built to run fully offline — no telemetry, no external calls beyond the Chart.js CDN.
+</footer>
+
+</div>
+
+<script>
+// ===== State =====
+const inputIds = [
+  'currentAge','retirementAge','lifeExpectancy',
+  'liquidAssets','physicalAssets',
+  'baseSpending','preMedicareHealthcare','medicareCost','inflation',
+  'ssAmount','ssStartAge','ssCola',
+  'bucket1Pct','bucket2Pct','bucket3Pct','fiaPct',
+  'bucket1Return','bucket2Return','bucket3Return','fiaReturn',
+  'fiaIncomeStart','fiaIncomeRate','fiaRollup',
+  'bucket1Years','bucket2Years'
+];
+
+function readState() {
+  const s = {};
+  inputIds.forEach(id => s[id] = parseFloat(document.getElementById(id).value) || 0);
+  s.fiaIncomeRider = document.getElementById('fiaIncomeRider').checked;
+  return s;
+}
+
+function fmt(n) {
+  if (!isFinite(n)) return '—';
+  if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + (n/1e3).toFixed(0) + 'k';
+  return '$' + Math.round(n).toLocaleString();
+}
+
+function fmtFull(n) {
+  if (!isFinite(n)) return '—';
+  return '$' + Math.round(n).toLocaleString();
+}
+
+// ===== Core simulation =====
+function simulate(s) {
+  const years = [];
+  let b1 = s.liquidAssets * s.bucket1Pct / 100;
+  let b2 = s.liquidAssets * s.bucket2Pct / 100;
+  let b3 = s.liquidAssets * s.bucket3Pct / 100;
+  let fia = s.liquidAssets * s.fiaPct / 100;
+  let fiaIncomeBase = fia;  // for income rider roll-up
+
+  let depletedAge = null;
+
+  for (let age = s.retirementAge; age <= s.lifeExpectancy; age++) {
+    const yo = age - s.retirementAge;
+    const inflMult = Math.pow(1 + s.inflation/100, yo);
+
+    // FIA income base roll-up before activation
+    if (s.fiaIncomeRider && age < s.fiaIncomeStart) {
+      fiaIncomeBase *= (1 + s.fiaRollup/100);
+    }
+
+    const livingExp = s.baseSpending * inflMult;
+    const healthcare = (age < 65 ? s.preMedicareHealthcare : s.medicareCost) * inflMult;
+    const totalNeed = livingExp + healthcare;
+
+    let ssIncome = 0;
+    if (age >= s.ssStartAge) {
+      const ssMult = Math.pow(1 + s.ssCola/100, age - s.ssStartAge);
+      ssIncome = s.ssAmount * ssMult;
+    }
+
+    let fiaIncome = 0;
+    if (s.fiaIncomeRider && age >= s.fiaIncomeStart) {
+      fiaIncome = fiaIncomeBase * s.fiaIncomeRate / 100;
+    }
+
+    const grossNeed = totalNeed;
+    const netWithdrawal = Math.max(0, grossNeed - ssIncome - fiaIncome);
+
+    // Withdraw cascade: B1 → B2 → B3 → FIA (if no rider, treat FIA as last-resort liquid)
+    let need = netWithdrawal;
+    const fromB1 = Math.min(b1, need); b1 -= fromB1; need -= fromB1;
+    const fromB2 = Math.min(b2, need); b2 -= fromB2; need -= fromB2;
+    const fromB3 = Math.min(b3, need); b3 -= fromB3; need -= fromB3;
+    let fromFIA = 0;
+    if (!s.fiaIncomeRider) {
+      fromFIA = Math.min(fia, need); fia -= fromFIA; need -= fromFIA;
+    } else {
+      // With rider, principal still depletes if rider income < total need + you draw on principal
+      // We've already counted fiaIncome separately; the underlying account doesn't fund extras here.
+    }
+
+    const shortfall = need;
+
+    // Grow remaining balances (end-of-year approximation)
+    b1 *= (1 + s.bucket1Return/100);
+    b2 *= (1 + s.bucket2Return/100);
+    b3 *= (1 + s.bucket3Return/100);
+    if (!s.fiaIncomeRider) {
+      fia *= (1 + s.fiaReturn/100);
+    } else if (age >= s.fiaIncomeStart) {
+      // After activation, account grows at FIA rate but income is paid out
+      const beforeIncome = fia * (1 + s.fiaReturn/100);
+      fia = Math.max(0, beforeIncome - fiaIncome);
+    } else {
+      fia *= (1 + s.fiaReturn/100);
+    }
+
+    // Refill cascade (after growth)
+    const targetB1 = totalNeed * s.bucket1Years;
+    const targetB2 = totalNeed * s.bucket2Years;
+
+    if (b1 < targetB1 * 0.5 && b2 > 0) {
+      const refill = Math.min(b2, targetB1 - b1);
+      b1 += refill; b2 -= refill;
+    }
+    if (b2 < targetB2 * 0.4 && b3 > 0) {
+      const refill = Math.min(b3, targetB2 - b2);
+      b2 += refill; b3 -= refill;
+    }
+
+    const total = b1 + b2 + b3 + fia;
+
+    if (depletedAge === null && total <= 0 && shortfall > 0) {
+      depletedAge = age;
+    }
+
+    years.push({
+      age, livingExp, healthcare, totalNeed,
+      ssIncome, fiaIncome, netWithdrawal, shortfall,
+      b1: Math.max(0,b1), b2: Math.max(0,b2), b3: Math.max(0,b3), fia: Math.max(0,fia),
+      total: Math.max(0,total),
+      realTotal: Math.max(0,total) / inflMult,
+      inflMult
+    });
+  }
+
+  return { years, depletedAge };
+}
+
+// ===== Charts =====
+let charts = {};
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => c && c.destroy());
+  charts = {};
+}
+
+function renderCharts(sim) {
+  destroyCharts();
+  const labels = sim.years.map(y => y.age);
+
+  const gridColor = 'rgba(148, 163, 184, 0.08)';
+  const tickColor = '#94a3b8';
+  const commonOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0f172a',
+        borderColor: '#334155',
+        borderWidth: 1,
+        titleColor: '#e2e8f0',
+        bodyColor: '#cbd5e1',
+        callbacks: {
+          label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`
+        }
+      }
+    },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 12 } },
+      y: { grid: { color: gridColor }, ticks: { color: tickColor, callback: (v) => fmt(v) }, stacked: true }
+    }
+  };
+
+  // Portfolio stacked area
+  charts.portfolio = new Chart(document.getElementById('chartPortfolio'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Bucket 1 — Cash', data: sim.years.map(y => y.b1), backgroundColor: 'rgba(6, 182, 212, 0.6)', borderColor: '#06b6d4', fill: true, tension: 0.2, pointRadius: 0 },
+        { label: 'Bucket 2 — Bonds', data: sim.years.map(y => y.b2), backgroundColor: 'rgba(139, 92, 246, 0.6)', borderColor: '#8b5cf6', fill: true, tension: 0.2, pointRadius: 0 },
+        { label: 'Bucket 3 — Stocks', data: sim.years.map(y => y.b3), backgroundColor: 'rgba(16, 185, 129, 0.6)', borderColor: '#10b981', fill: true, tension: 0.2, pointRadius: 0 },
+        { label: 'FIA', data: sim.years.map(y => y.fia), backgroundColor: 'rgba(245, 158, 11, 0.6)', borderColor: '#f59e0b', fill: true, tension: 0.2, pointRadius: 0 }
+      ]
+    },
+    options: commonOpts
+  });
+
+  // Income sources
+  charts.income = new Chart(document.getElementById('chartIncome'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Social Security', data: sim.years.map(y => y.ssIncome), backgroundColor: '#3b82f6' },
+        { label: 'FIA Income', data: sim.years.map(y => y.fiaIncome), backgroundColor: '#f59e0b' },
+        { label: 'Portfolio Withdrawal', data: sim.years.map(y => y.netWithdrawal), backgroundColor: '#10b981' }
+      ]
+    },
+    options: { ...commonOpts, plugins: { ...commonOpts.plugins, legend: { display: true, position: 'bottom', labels: { color: tickColor, font: { size: 11 } } } } }
+  });
+
+  // Spending breakdown
+  charts.spending = new Chart(document.getElementById('chartSpending'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Living Expenses', data: sim.years.map(y => y.livingExp), backgroundColor: '#8b5cf6' },
+        { label: 'Healthcare', data: sim.years.map(y => y.healthcare), backgroundColor: '#ef4444' }
+      ]
+    },
+    options: { ...commonOpts, plugins: { ...commonOpts.plugins, legend: { display: true, position: 'bottom', labels: { color: tickColor, font: { size: 11 } } } } }
+  });
+}
+
+// ===== Tables =====
+function renderTables(sim) {
+  const tbS = document.getElementById('tableBodySummary');
+  const tbB = document.getElementById('tableBodyBuckets');
+  tbS.innerHTML = '';
+  tbB.innerHTML = '';
+
+  sim.years.forEach(y => {
+    const cls = y.total <= 0 ? 'row-bad' : (y.total < y.totalNeed * 5 ? 'row-warn' : '');
+    const trS = document.createElement('tr');
+    trS.className = cls;
+    trS.innerHTML = `
+      <td>${y.age}</td>
+      <td>${fmtFull(y.livingExp)}</td>
+      <td>${fmtFull(y.healthcare)}</td>
+      <td>${fmtFull(y.totalNeed)}</td>
+      <td>${fmtFull(y.ssIncome)}</td>
+      <td>${fmtFull(y.fiaIncome)}</td>
+      <td>${fmtFull(y.netWithdrawal)}</td>
+      <td>${fmtFull(y.total)}</td>
+    `;
+    tbS.appendChild(trS);
+
+    const trB = document.createElement('tr');
+    trB.className = cls;
+    trB.innerHTML = `
+      <td>${y.age}</td>
+      <td>${fmtFull(y.b1)}</td>
+      <td>${fmtFull(y.b2)}</td>
+      <td>${fmtFull(y.b3)}</td>
+      <td>${fmtFull(y.fia)}</td>
+      <td>${fmtFull(y.total)}</td>
+      <td>${fmtFull(y.realTotal)}</td>
+    `;
+    tbB.appendChild(trB);
+  });
+}
+
+// ===== Allocation bars =====
+function checkAllocation(s) {
+  const total = s.bucket1Pct + s.bucket2Pct + s.bucket3Pct + s.fiaPct;
+  const warn = document.getElementById('allocWarn');
+  if (Math.abs(total - 100) > 0.5) {
+    warn.classList.add('show');
+    warn.textContent = `⚠ Allocations total ${total.toFixed(1)}% — should be 100%`;
+  } else {
+    warn.classList.remove('show');
+  }
+}
+
+// ===== Summary metrics =====
+function updateSummary(s, sim) {
+  const last = sim.years[sim.years.length - 1];
+  const first = sim.years[0];
+
+  // Survival
+  const survivalEl = document.getElementById('metricSurvival');
+  if (sim.depletedAge) {
+    survivalEl.className = 'metric bad';
+    survivalEl.querySelector('.value').textContent = `Age ${sim.depletedAge}`;
+    survivalEl.querySelector('.sub').textContent = `depleted ${s.lifeExpectancy - sim.depletedAge} yrs early`;
+  } else if (last.total < last.totalNeed * 5) {
+    survivalEl.className = 'metric warn';
+    survivalEl.querySelector('.value').textContent = `Age ${s.lifeExpectancy}+`;
+    survivalEl.querySelector('.sub').textContent = `tight margin at end`;
+  } else {
+    survivalEl.className = 'metric good';
+    survivalEl.querySelector('.value').textContent = `Age ${s.lifeExpectancy}+`;
+    survivalEl.querySelector('.sub').textContent = `comfortable margin`;
+  }
+
+  // SWR
+  const swr = first.netWithdrawal / s.liquidAssets * 100;
+  document.getElementById('metricSWR').textContent = swr.toFixed(2) + '%';
+
+  // Lifetime spending (real $)
+  const lifetime = sim.years.reduce((sum, y) => sum + (y.livingExp + y.healthcare) / y.inflMult, 0);
+  document.getElementById('metricLifetime').textContent = fmt(lifetime);
+
+  // Ending portfolio
+  document.getElementById('metricEnding').textContent = fmt(last.total);
+  document.getElementById('metricEndingSub').textContent = `real: ${fmt(last.realTotal)}`;
+
+  // Banner
+  const succ = document.getElementById('successBanner');
+  const dep = document.getElementById('depletedBanner');
+  succ.classList.remove('show');
+  dep.classList.remove('show');
+  if (sim.depletedAge) {
+    dep.classList.add('show');
+    dep.textContent = `⚠ Portfolio depleted at age ${sim.depletedAge}. Reduce spending, delay retirement, or shift allocation.`;
+  } else if (last.realTotal > s.liquidAssets * 0.5) {
+    succ.classList.add('show');
+    succ.textContent = `✓ Portfolio survives through age ${s.lifeExpectancy} with ${fmt(last.realTotal)} (real $) remaining — sustainable plan.`;
+  }
+}
+
+// ===== Main recalc =====
+function recalc() {
+  const s = readState();
+  checkAllocation(s);
+  const sim = simulate(s);
+  updateSummary(s, sim);
+  renderCharts(sim);
+  renderTables(sim);
+}
+
+// ===== Solve for max sustainable spending =====
+function findSustainable() {
+  const s = readState();
+  let lo = 10000, hi = 200000, best = lo;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    const testState = { ...s, baseSpending: mid };
+    const sim = simulate(testState);
+    const last = sim.years[sim.years.length - 1];
+    if (sim.depletedAge === null && last.realTotal > 50000) {
+      best = mid;
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  document.getElementById('baseSpending').value = Math.floor(best / 500) * 500;
+  recalc();
+  const banner = document.getElementById('successBanner');
+  banner.classList.add('show');
+  banner.textContent = `✓ Solved: max sustainable living-expense budget is ~${fmt(best)}/yr (today's $) given current allocation, returns, and SS.`;
+}
+
+// ===== Tabs =====
+function switchTab(btn, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+
+// ===== Presets =====
+function applyPreset(name) {
+  const presets = {
+    user: {
+      currentAge:55, retirementAge:55, lifeExpectancy:92,
+      liquidAssets:800000, physicalAssets:200000,
+      baseSpending:55000, preMedicareHealthcare:18000, medicareCost:12000, inflation:3.0,
+      ssAmount:36000, ssStartAge:62, ssCola:2.5,
+      bucket1Pct:10, bucket2Pct:30, bucket3Pct:60, fiaPct:0,
+      bucket1Return:4.5, bucket2Return:5.0, bucket3Return:7.5, fiaReturn:5.0,
+      fiaIncomeStart:65, fiaIncomeRate:5.5, fiaRollup:6.0,
+      bucket1Years:2, bucket2Years:5,
+      fiaIncomeRider:false
+    },
+    conservative: {
+      currentAge:55, retirementAge:55, lifeExpectancy:95,
+      liquidAssets:800000, physicalAssets:200000,
+      baseSpending:50000, preMedicareHealthcare:18000, medicareCost:12000, inflation:3.0,
+      ssAmount:36000, ssStartAge:62, ssCola:2.5,
+      bucket1Pct:15, bucket2Pct:45, bucket3Pct:40, fiaPct:0,
+      bucket1Return:4.5, bucket2Return:4.5, bucket3Return:6.5, fiaReturn:5.0,
+      fiaIncomeStart:65, fiaIncomeRate:5.5, fiaRollup:6.0,
+      bucket1Years:3, bucket2Years:7,
+      fiaIncomeRider:false
+    },
+    aggressive: {
+      currentAge:55, retirementAge:55, lifeExpectancy:92,
+      liquidAssets:800000, physicalAssets:200000,
+      baseSpending:60000, preMedicareHealthcare:18000, medicareCost:12000, inflation:3.0,
+      ssAmount:36000, ssStartAge:67, ssCola:2.5,
+      bucket1Pct:5, bucket2Pct:20, bucket3Pct:75, fiaPct:0,
+      bucket1Return:4.5, bucket2Return:5.0, bucket3Return:8.5, fiaReturn:5.0,
+      fiaIncomeStart:65, fiaIncomeRate:5.5, fiaRollup:6.0,
+      bucket1Years:1, bucket2Years:4,
+      fiaIncomeRider:false
+    },
+    'fia-heavy': {
+      currentAge:55, retirementAge:55, lifeExpectancy:92,
+      liquidAssets:800000, physicalAssets:200000,
+      baseSpending:55000, preMedicareHealthcare:18000, medicareCost:12000, inflation:3.0,
+      ssAmount:36000, ssStartAge:62, ssCola:2.5,
+      bucket1Pct:10, bucket2Pct:20, bucket3Pct:40, fiaPct:30,
+      bucket1Return:4.5, bucket2Return:5.0, bucket3Return:7.5, fiaReturn:5.0,
+      fiaIncomeStart:65, fiaIncomeRate:5.5, fiaRollup:6.0,
+      bucket1Years:2, bucket2Years:5,
+      fiaIncomeRider:true
+    }
+  };
+  const p = presets[name];
+  if (!p) return;
+  Object.entries(p).forEach(([k,v]) => {
+    const el = document.getElementById(k);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = v;
+    else el.value = v;
+  });
+  recalc();
+}
+
+// ===== Wire up =====
+inputIds.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', recalc);
+});
+document.getElementById('fiaIncomeRider').addEventListener('change', recalc);
+
+// Initial render
+recalc();
+</script>
+</body>
+</html>

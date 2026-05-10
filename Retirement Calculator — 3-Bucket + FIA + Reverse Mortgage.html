@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retirement Calculator — 3-Bucket + FIA + Reverse Mortgage</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0b1220; --bg2: #0f172a; --panel: #1e293b; --panel2: #273449;
+  --border: #334155; --text: #e2e8f0; --text-dim: #94a3b8; --text-faint: #64748b;
+  --accent: #3b82f6; --green: #10b981; --yellow: #f59e0b; --red: #ef4444;
+  --b1: #06b6d4; --b2: #8b5cf6; --b3: #10b981; --fia: #f59e0b;
+  --rm: #ec4899; --home: #14b8a6;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.5; font-size: 14px; min-height: 100vh;
+}
+.app { max-width: 1500px; margin: 0 auto; padding: 24px; }
+header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+h1 .accent { color: var(--accent); }
+h1 .pink { color: var(--rm); }
+.subtitle { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
+.layout { display: grid; grid-template-columns: 400px 1fr; gap: 20px; }
+@media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+.panel h2 {
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text-dim); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.section { margin-bottom: 18px; } .section:last-child { margin-bottom: 0; }
+.field { display: grid; grid-template-columns: 1fr 110px; gap: 10px; align-items: center; margin-bottom: 10px; }
+.field label { font-size: 13px; color: var(--text-dim); }
+.field label .hint { display: block; font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+input[type="number"], select {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 8px; border-radius: 6px; font-size: 13px; font-family: inherit;
+  width: 100%; text-align: right;
+}
+select { text-align: left; cursor: pointer; }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.field.check { grid-template-columns: 24px 1fr; }
+.summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+@media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+.metric { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.metric .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 6px; }
+.metric .value { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+.metric .sub { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+.metric.good .value { color: var(--green); }
+.metric.warn .value { color: var(--yellow); }
+.metric.bad .value { color: var(--red); }
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 1300px) { .charts-grid { grid-template-columns: 1fr; } }
+.chart-wrap { position: relative; height: 280px; }
+.chart-wrap.tall { height: 320px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+table th {
+  text-align: right; padding: 8px 10px; background: var(--bg2); border-bottom: 1px solid var(--border);
+  font-weight: 500; color: var(--text-dim); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.4px; position: sticky; top: 0;
+}
+table th:first-child, table td:first-child { text-align: left; }
+table td { padding: 6px 10px; border-bottom: 1px solid #1e293b; color: var(--text); }
+table tr:hover td { background: rgba(59, 130, 246, 0.06); }
+.table-wrap { max-height: 420px; overflow-y: auto; border-radius: 8px; border: 1px solid var(--border); }
+.row-warn td { color: var(--yellow); }
+.row-bad td { color: var(--red); }
+.row-rm td { background: rgba(236, 72, 153, 0.06); }
+.tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tab {
+  padding: 8px 14px; background: transparent; border: none; color: var(--text-dim); cursor: pointer;
+  font-size: 13px; font-family: inherit; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab:hover { color: var(--text); }
+.tab-content { display: none; } .tab-content.active { display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--text-dim); }
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+.notes {
+  background: rgba(59, 130, 246, 0.08); border-left: 3px solid var(--accent);
+  padding: 12px 14px; border-radius: 0 6px 6px 0; margin-top: 16px;
+  font-size: 12px; color: var(--text-dim); line-height: 1.6;
+}
+.notes strong { color: var(--text); }
+.preset-row { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.preset-btn {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text-dim);
+  padding: 5px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; font-family: inherit;
+}
+.preset-btn:hover { border-color: var(--accent); color: var(--text); }
+.action-bar { display: flex; gap: 8px; margin-bottom: 14px; }
+.btn {
+  background: var(--accent); color: white; border: none; padding: 8px 14px;
+  border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; font-weight: 500;
+}
+.btn:hover { background: #2563eb; }
+.btn-secondary { background: var(--panel2); }
+.btn-secondary:hover { background: #3b4a64; }
+.banner { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; display: none; }
+.banner.show { display: block; }
+.banner.bad { background: rgba(239, 68, 68, 0.12); border: 1px solid var(--red); color: #fca5a5; }
+.banner.good { background: rgba(16, 185, 129, 0.10); border: 1px solid var(--green); color: #6ee7b7; }
+.banner.info { background: rgba(236, 72, 153, 0.10); border: 1px solid var(--rm); color: #f9a8d4; }
+footer {
+  margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-faint); line-height: 1.7;
+}
+.alloc-warn { color: var(--yellow); font-size: 12px; margin-top: 8px; display: none; }
+.alloc-warn.show { display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <h1>Retirement Calculator <span class="accent">— 3-Bucket + FIA</span> <span class="pink">+ Reverse Mortgage</span></h1>
+  <div class="subtitle">HECM-aware withdrawal simulation. Tap home equity as a backstop when liquid assets deplete, or as tenure income from day one.</div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="panel">
+      <div class="action-bar">
+        <button class="btn" onclick="recalc()">Recalculate</button>
+        <button class="btn btn-secondary" onclick="findSustainable()">Solve Max Spend</button>
+        <button class="btn btn-secondary" onclick="runMonteCarlo()">Monte Carlo</button>
+      </div>
+      <div class="preset-row">
+        <button class="preset-btn" onclick="applyPreset('user')">Your Scenario</button>
+        <button class="preset-btn" onclick="applyPreset('rm-backstop')">RM Backstop</button>
+        <button class="preset-btn" onclick="applyPreset('rm-tenure')">RM Tenure</button>
+        <button class="preset-btn" onclick="applyPreset('fia-rm')">FIA + RM Combo</button>
+        <button class="preset-btn" onclick="applyPreset('conservative')">Conservative</button>
+      </div>
+
+      <div class="section">
+        <h2>Personal</h2>
+        <div class="field"><label>Current age</label><input type="number" id="currentAge" value="55"></div>
+        <div class="field"><label>Retirement age</label><input type="number" id="retirementAge" value="60"></div>
+        <div class="field"><label>Plan to age <span class="hint">life expectancy</span></label><input type="number" id="lifeExpectancy" value="95"></div>
+      </div>
+
+      <div class="section">
+        <h2>Liquid Assets</h2>
+        <div class="field"><label>Total liquid <span class="hint">401k, IRA, brokerage</span></label><input type="number" id="liquidAssets" value="1000000" step="10000"></div>
+      </div>
+
+      <div class="section">
+        <h2>Home & Reverse Mortgage</h2>
+        <div class="field"><label>Home value <span class="hint">at retirement</span></label><input type="number" id="homeValue" value="300000" step="10000"></div>
+        <div class="field"><label>Mortgage balance <span class="hint">remaining at retirement</span></label><input type="number" id="mortgageBalance" value="0" step="5000"></div>
+        <div class="field"><label>Home appreciation %</label><input type="number" id="homeAppreciation" value="1.0" step="0.1"></div>
+        <div class="field"><label>Other physical <span class="hint">cars etc — legacy only</span></label><input type="number" id="otherPhysical" value="50000" step="5000"></div>
+        <div class="field">
+          <label>RM strategy</label>
+          <select id="rmStrategy">
+            <option value="off">Off</option>
+            <option value="loc-backstop" selected>LOC Backstop (when liquid runs out)</option>
+            <option value="tenure">Tenure (lifetime monthly income)</option>
+          </select>
+        </div>
+        <div class="field"><label>HECM eligible age</label><input type="number" id="hecmAge" value="62"></div>
+        <div class="field"><label>HECM rate % <span class="hint">includes MIP, ~6-7% typical</span></label><input type="number" id="hecmRate" value="6.5" step="0.1"></div>
+        <div class="field"><label>Tenure start age <span class="hint">if tenure mode</span></label><input type="number" id="rmTenureStart" value="65"></div>
+      </div>
+
+      <div class="section">
+        <h2>Spending</h2>
+        <div class="field"><label>Annual living expenses <span class="hint">today's $, ex-healthcare</span></label><input type="number" id="baseSpending" value="42000" step="1000"></div>
+        <div class="field"><label>Pre-65 healthcare <span class="hint">ACA / COBRA</span></label><input type="number" id="preMedicareHealthcare" value="18000" step="500"></div>
+        <div class="field"><label>Medicare era <span class="hint">65+ annual</span></label><input type="number" id="medicareCost" value="12000" step="500"></div>
+        <div class="field"><label>Inflation %</label><input type="number" id="inflation" value="3.0" step="0.1"></div>
+      </div>
+
+      <div class="section">
+        <h2>Social Security</h2>
+        <div class="field"><label>Annual benefit</label><input type="number" id="ssAmount" value="36000" step="500"></div>
+        <div class="field"><label>Start age</label><input type="number" id="ssStartAge" value="62"></div>
+        <div class="field"><label>COLA %</label><input type="number" id="ssCola" value="2.5" step="0.1"></div>
+      </div>
+
+      <div class="section">
+        <h2>3-Bucket Allocation (% of liquid)</h2>
+        <div class="field"><label><span style="color:var(--b1)">Bucket 1</span> Cash / MMF</label><input type="number" id="bucket1Pct" value="10" step="1"></div>
+        <div class="field"><label><span style="color:var(--b2)">Bucket 2</span> Bonds</label><input type="number" id="bucket2Pct" value="30" step="1"></div>
+        <div class="field"><label><span style="color:var(--b3)">Bucket 3</span> Stocks</label><input type="number" id="bucket3Pct" value="60" step="1"></div>
+        <div class="field"><label><span style="color:var(--fia)">FIA</span> Fixed Indexed Annuity</label><input type="number" id="fiaPct" value="0" step="1"></div>
+        <div class="alloc-warn" id="allocWarn"></div>
+      </div>
+
+      <div class="section">
+        <h2>Expected Returns %</h2>
+        <div class="field"><label>Bucket 1</label><input type="number" id="bucket1Return" value="3.0" step="0.1"></div>
+        <div class="field"><label>Bucket 2</label><input type="number" id="bucket2Return" value="4.0" step="0.1"></div>
+        <div class="field"><label>Bucket 3</label><input type="number" id="bucket3Return" value="6.0" step="0.1"></div>
+        <div class="field"><label>FIA effective</label><input type="number" id="fiaReturn" value="5.0" step="0.1"></div>
+      </div>
+
+      <div class="section">
+        <h2>FIA Income Rider</h2>
+        <div class="field check"><input type="checkbox" id="fiaIncomeRider"><label>Enable lifetime income rider</label></div>
+        <div class="field"><label>Income start age</label><input type="number" id="fiaIncomeStart" value="65"></div>
+        <div class="field"><label>Payout rate %</label><input type="number" id="fiaIncomeRate" value="5.5" step="0.1"></div>
+        <div class="field"><label>Roll-up rate %</label><input type="number" id="fiaRollup" value="6.0" step="0.1"></div>
+      </div>
+
+      <div class="section">
+        <h2>Bucket Strategy</h2>
+        <div class="field"><label>B1 target years</label><input type="number" id="bucket1Years" value="2" step="0.5"></div>
+        <div class="field"><label>B2 target years</label><input type="number" id="bucket2Years" value="5" step="0.5"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="banner good" id="successBanner"></div>
+    <div class="banner bad" id="depletedBanner"></div>
+    <div class="banner info" id="rmBanner"></div>
+
+    <div class="summary-grid">
+      <div class="metric" id="metricSurvival">
+        <div class="label">Plan Survives To</div><div class="value">—</div><div class="sub"></div>
+      </div>
+      <div class="metric">
+        <div class="label">Initial Withdrawal</div>
+        <div class="value" id="metricSWR">—</div>
+        <div class="sub">% of liquid, year 1</div>
+      </div>
+      <div class="metric">
+        <div class="label">RM Loan at End</div>
+        <div class="value" id="metricRMDrawn">—</div>
+        <div class="sub" id="metricRMDrawnSub">includes accrued interest</div>
+      </div>
+      <div class="metric">
+        <div class="label">Net Legacy</div>
+        <div class="value" id="metricLegacy">—</div>
+        <div class="sub" id="metricLegacySub"></div>
+      </div>
+      <div class="metric">
+        <div class="label">Ending Portfolio</div>
+        <div class="value" id="metricEnding">—</div>
+        <div class="sub" id="metricEndingSub"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="mcPanel" style="margin-bottom: 16px; display: none;">
+      <h2>Monte Carlo — 1000 Scenarios (with early-downturn stress)</h2>
+      <div class="summary-grid" id="mcStats" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 14px;"></div>
+      <div class="chart-wrap tall"><canvas id="chartMC"></canvas></div>
+      <div class="notes" style="margin-top:10px;">
+        <strong>Method.</strong> Each of 1000 trials draws annual returns from a normal distribution around your expected returns (σ: cash 1%, bonds 6%, stocks 18%). The first 5 years apply a sequence-of-returns drag (−10% mean for stocks, −4% for bonds, −0.5% for cash) to stress-test early bear markets. Spending, SS, FIA, and RM rules from your inputs are unchanged. Success = no shortfall through plan-to age.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom: 16px;">
+      <h2>Portfolio Trajectory</h2>
+      <div class="chart-wrap tall"><canvas id="chartPortfolio"></canvas></div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--b1)"></div>Bucket 1 — Cash</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--b2)"></div>Bucket 2 — Bonds</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--b3)"></div>Bucket 3 — Stocks</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--fia)"></div>FIA</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom: 16px;">
+      <h2>Home Equity & Reverse Mortgage</h2>
+      <div class="chart-wrap tall"><canvas id="chartHome"></canvas></div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--home)"></div>Home Value</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Net Home Equity</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div>LOC Available</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--rm)"></div>RM Loan Balance</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="panel">
+        <h2>Annual Income Sources</h2>
+        <div class="chart-wrap"><canvas id="chartIncome"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Spending Breakdown</h2>
+        <div class="chart-wrap"><canvas id="chartSpending"></canvas></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top: 16px;">
+      <h2>Year-by-Year Detail</h2>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab(this, 'tab-summary')">Cash Flow</button>
+        <button class="tab" onclick="switchTab(this, 'tab-buckets')">Bucket Balances</button>
+        <button class="tab" onclick="switchTab(this, 'tab-rm')">Reverse Mortgage</button>
+      </div>
+      <div class="tab-content active" id="tab-summary">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Age</th><th>Total Need</th><th>SS</th><th>FIA Inc</th><th>RM Inc</th><th>Withdrawal</th><th>Total Return</th><th>Portfolio</th><th>Net Worth</th></tr></thead>
+            <tbody id="tableBodySummary"></tbody>
+            <tfoot id="tableFootSummary"></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="tab-content" id="tab-buckets">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Age</th><th>B1 Cash</th><th>B2 Bonds</th><th>B3 Stocks</th><th>FIA</th><th>B1 Ret</th><th>B2 Ret</th><th>B3 Ret</th><th>FIA Ret</th><th>Total Ret</th><th>Withdrawal</th><th>Total Liquid</th><th>Real (today $)</th></tr></thead>
+            <tbody id="tableBodyBuckets"></tbody>
+            <tfoot id="tableFootBuckets"></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="tab-content" id="tab-rm">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Age</th><th>Home Value</th><th>LOC Avail</th><th>Loan Balance</th><th>RM Draw</th><th>Net Equity</th><th>Status</th></tr></thead>
+            <tbody id="tableBodyRM"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <strong>Reverse mortgage mechanics.</strong> HECM (Home Equity Conversion Mortgage) is the federally-insured RM available at 62+. The Principal Limit Factor (PLF) determines borrowing capacity as a % of home value, scaling from ~41% at 62 to ~58% at 80. Upfront costs (~2% MIP + origination + closing, ~$15-20k typical) are deducted from initial availability. Two strategies modeled: <strong>LOC Backstop</strong> opens the line of credit when first needed, lets it grow at the loan accrual rate, and taps it only when the liquid portfolio runs out — typically the most efficient HECM use. <strong>Tenure</strong> takes a guaranteed lifetime monthly payment from a chosen start age, computed using HUD's age-100 horizon. Loan balance compounds at the HECM rate; the loan is non-recourse, so heirs owe the lesser of loan balance or 95% of home value. Net legacy = max(0, home_value − loan_balance) + other_physical + remaining portfolio.
+    </div>
+  </main>
+</div>
+
+<footer>
+  Educational tool — not financial advice. PLF is approximated; actual values depend on the expected interest rate set by HUD at origination. Spousal eligibility (both 62+ as borrowers), property tax / insurance / maintenance obligations, and primary-residence requirements are not modeled. Loss of home equity reduces inheritance — coordinate with estate planning. Validate against a NRMLA-certified counselor and a fee-only fiduciary CFP. Runs fully offline; only Chart.js is loaded from CDN.
+</footer>
+
+</div>
+
+<script>
+const inputIds = [
+  'currentAge','retirementAge','lifeExpectancy','liquidAssets',
+  'homeValue','mortgageBalance','homeAppreciation','otherPhysical',
+  'hecmAge','hecmRate','rmTenureStart',
+  'baseSpending','preMedicareHealthcare','medicareCost','inflation',
+  'ssAmount','ssStartAge','ssCola',
+  'bucket1Pct','bucket2Pct','bucket3Pct','fiaPct',
+  'bucket1Return','bucket2Return','bucket3Return','fiaReturn',
+  'fiaIncomeStart','fiaIncomeRate','fiaRollup',
+  'bucket1Years','bucket2Years'
+];
+
+function readState() {
+  const s = {};
+  inputIds.forEach(id => s[id] = parseFloat(document.getElementById(id).value) || 0);
+  s.fiaIncomeRider = document.getElementById('fiaIncomeRider').checked;
+  s.rmStrategy = document.getElementById('rmStrategy').value;
+  return s;
+}
+
+function fmt(n) {
+  if (!isFinite(n)) return '—';
+  if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + (n/1e3).toFixed(0) + 'k';
+  return '$' + Math.round(n).toLocaleString();
+}
+function fmtFull(n) { if (!isFinite(n)) return '—'; return '$' + Math.round(n).toLocaleString(); }
+
+function plf(age) {
+  if (age < 62) return 0;
+  return Math.min(0.75, 0.41 + 0.0095 * (age - 62));
+}
+function tenureAnnual(principalLimit, age, hecmRate) {
+  const months = Math.max(60, (100 - age) * 12);
+  const r = hecmRate / 12;
+  if (r <= 0) return principalLimit / (months / 12);
+  const monthly = principalLimit * r / (1 - Math.pow(1 + r, -months));
+  return monthly * 12;
+}
+
+function simulate(s, returnsByYear) {
+  const years = [];
+  let b1 = s.liquidAssets * s.bucket1Pct / 100;
+  let b2 = s.liquidAssets * s.bucket2Pct / 100;
+  let b3 = s.liquidAssets * s.bucket3Pct / 100;
+  let fia = s.liquidAssets * s.fiaPct / 100;
+  let fiaIncomeBase = fia;
+
+  let homeValue = s.homeValue;
+  let mortgageBalance = s.mortgageBalance;
+  let hecmActivated = false;
+  let locAvailable = 0;
+  let loanBalance = 0;
+  let tenureAnnualPayment = 0;
+  const hecmRate = s.hecmRate / 100;
+  const homeApprRate = s.homeAppreciation / 100;
+
+  let rmActivatedAge = null;
+  let firstRMDrawAge = null;
+
+  const activateHECM = (age) => {
+    if (hecmActivated) return;
+    const principalLimit = homeValue * plf(age);
+    const mip = Math.min(homeValue * 0.02, 19200);
+    const upfrontCosts = mip + 6000 + 3000;
+    locAvailable = Math.max(0, principalLimit - mortgageBalance - upfrontCosts);
+    loanBalance = mortgageBalance + upfrontCosts;
+    mortgageBalance = 0;
+    hecmActivated = true;
+    rmActivatedAge = age;
+    if (s.rmStrategy === 'tenure') {
+      tenureAnnualPayment = tenureAnnual(principalLimit, age, hecmRate);
+    }
+  };
+
+  for (let age = s.retirementAge; age <= s.lifeExpectancy; age++) {
+    const yo = age - s.retirementAge;
+    const inflMult = Math.pow(1 + s.inflation/100, yo);
+
+    if (s.fiaIncomeRider && age < s.fiaIncomeStart) {
+      fiaIncomeBase *= (1 + s.fiaRollup/100);
+    }
+
+    const livingExp = s.baseSpending * inflMult;
+    const healthcare = (age < 65 ? s.preMedicareHealthcare : s.medicareCost) * inflMult;
+    const totalNeed = livingExp + healthcare;
+
+    let ssIncome = 0;
+    if (age >= s.ssStartAge) {
+      ssIncome = s.ssAmount * Math.pow(1 + s.ssCola/100, age - s.ssStartAge);
+    }
+    let fiaIncome = 0;
+    if (s.fiaIncomeRider && age >= s.fiaIncomeStart) {
+      fiaIncome = fiaIncomeBase * s.fiaIncomeRate / 100;
+    }
+
+    let rmIncome = 0;
+    if (s.rmStrategy === 'tenure' && age >= s.rmTenureStart && age >= s.hecmAge) {
+      if (!hecmActivated) activateHECM(age);
+      rmIncome = tenureAnnualPayment;
+      loanBalance += rmIncome;
+      if (firstRMDrawAge === null) firstRMDrawAge = age;
+    }
+
+    const netWithdrawal = Math.max(0, totalNeed - ssIncome - fiaIncome - rmIncome);
+
+    let need = netWithdrawal;
+    const fromB1 = Math.min(b1, need); b1 -= fromB1; need -= fromB1;
+    const fromB2 = Math.min(b2, need); b2 -= fromB2; need -= fromB2;
+    const fromB3 = Math.min(b3, need); b3 -= fromB3; need -= fromB3;
+    if (!s.fiaIncomeRider) {
+      const fromFIA = Math.min(fia, need); fia -= fromFIA; need -= fromFIA;
+    }
+
+    let rmBackstopDraw = 0;
+    if (need > 0 && s.rmStrategy === 'loc-backstop' && age >= s.hecmAge) {
+      if (!hecmActivated) activateHECM(age);
+      rmBackstopDraw = Math.min(locAvailable, need);
+      locAvailable -= rmBackstopDraw;
+      loanBalance += rmBackstopDraw;
+      need -= rmBackstopDraw;
+      if (firstRMDrawAge === null) firstRMDrawAge = age;
+    }
+
+    const shortfall = need;
+    const liquidAfterWithdrawal = b1 + b2 + b3 + fia;
+
+    const r = returnsByYear ? returnsByYear[yo] : null;
+    const r1 = r ? r.b1 : s.bucket1Return/100;
+    const r2 = r ? r.b2 : s.bucket2Return/100;
+    const r3 = r ? r.b3 : s.bucket3Return/100;
+    const rf = r ? r.fia : s.fiaReturn/100;
+    const b1Gain = b1 * r1;
+    const b2Gain = b2 * r2;
+    const b3Gain = b3 * r3;
+    let fiaGain = 0;
+    b1 += b1Gain;
+    b2 += b2Gain;
+    b3 += b3Gain;
+    if (!s.fiaIncomeRider) {
+      fiaGain = fia * rf;
+      fia += fiaGain;
+    } else if (age >= s.fiaIncomeStart) {
+      fiaGain = fia * rf;
+      fia = Math.max(0, fia + fiaGain - fiaIncome);
+    } else {
+      fiaGain = fia * rf;
+      fia += fiaGain;
+    }
+    const totalGain = b1Gain + b2Gain + b3Gain + fiaGain;
+    const totalLiquid = b1 + b2 + b3 + fia;
+
+    const targetB1 = totalNeed * s.bucket1Years;
+    const targetB2 = totalNeed * s.bucket2Years;
+    if (b1 < targetB1 * 0.5 && b2 > 0) {
+      const refill = Math.min(b2, targetB1 - b1);
+      b1 += refill; b2 -= refill;
+    }
+    if (b2 < targetB2 * 0.4 && b3 > 0) {
+      const refill = Math.min(b3, targetB2 - b2);
+      b2 += refill; b3 -= refill;
+    }
+
+    if (hecmActivated) {
+      locAvailable *= (1 + hecmRate);
+      loanBalance *= (1 + hecmRate);
+    }
+    homeValue *= (1 + homeApprRate);
+
+    const netHomeEquity = Math.max(0, homeValue - loanBalance);
+    const netWorth = Math.max(0, b1 + b2 + b3 + fia) + netHomeEquity + s.otherPhysical;
+
+    let status = '—';
+    if (rmBackstopDraw > 0) status = 'LOC draw';
+    else if (rmIncome > 0) status = 'Tenure pmt';
+    else if (hecmActivated) status = 'LOC growing';
+    else if (s.rmStrategy !== 'off' && age < s.hecmAge) status = 'Pre-HECM';
+    if (shortfall > 0 && hecmActivated && locAvailable < 0.01) status = 'LOC depleted';
+    if (shortfall > 0 && !hecmActivated && s.rmStrategy === 'off') status = 'Shortfall';
+
+    years.push({
+      age, livingExp, healthcare, totalNeed,
+      ssIncome, fiaIncome, rmIncome, rmBackstopDraw,
+      netWithdrawal, shortfall,
+      b1: Math.max(0,b1), b2: Math.max(0,b2), b3: Math.max(0,b3), fia: Math.max(0,fia),
+      b1Gain, b2Gain, b3Gain, fiaGain, totalGain,
+      total: Math.max(0, totalLiquid),
+      liquidAfterWithdrawal: Math.max(0, liquidAfterWithdrawal),
+      realTotal: Math.max(0, totalLiquid) / inflMult,
+      homeValue, locAvailable: Math.max(0, locAvailable),
+      loanBalance: Math.max(0, loanBalance),
+      netHomeEquity, netWorth, hecmActivated, status, inflMult
+    });
+  }
+
+  return { years, rmActivatedAge, firstRMDrawAge };
+}
+
+let charts = {};
+function destroyCharts() { Object.values(charts).forEach(c => c && c.destroy()); charts = {}; }
+
+function renderCharts(sim) {
+  destroyCharts();
+  const labels = sim.years.map(y => y.age);
+  const gridColor = 'rgba(148, 163, 184, 0.08)';
+  const tickColor = '#94a3b8';
+
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0f172a', borderColor: '#334155', borderWidth: 1,
+        titleColor: '#e2e8f0', bodyColor: '#cbd5e1',
+        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` }
+      }
+    },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 12 } },
+      y: { grid: { color: gridColor }, ticks: { color: tickColor, callback: (v) => fmt(v) } }
+    }
+  };
+  const stackedOpts = JSON.parse(JSON.stringify(baseOpts));
+  stackedOpts.scales.y.stacked = true;
+  stackedOpts.plugins = baseOpts.plugins;
+
+  charts.portfolio = new Chart(document.getElementById('chartPortfolio'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Bucket 1 — Cash', data: sim.years.map(y => y.b1), backgroundColor: 'rgba(6, 182, 212, 0.6)', borderColor: '#06b6d4', fill: true, tension: 0.2, pointRadius: 0 },
+      { label: 'Bucket 2 — Bonds', data: sim.years.map(y => y.b2), backgroundColor: 'rgba(139, 92, 246, 0.6)', borderColor: '#8b5cf6', fill: true, tension: 0.2, pointRadius: 0 },
+      { label: 'Bucket 3 — Stocks', data: sim.years.map(y => y.b3), backgroundColor: 'rgba(16, 185, 129, 0.6)', borderColor: '#10b981', fill: true, tension: 0.2, pointRadius: 0 },
+      { label: 'FIA', data: sim.years.map(y => y.fia), backgroundColor: 'rgba(245, 158, 11, 0.6)', borderColor: '#f59e0b', fill: true, tension: 0.2, pointRadius: 0 }
+    ]},
+    options: stackedOpts
+  });
+
+  charts.home = new Chart(document.getElementById('chartHome'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Home Value', data: sim.years.map(y => y.homeValue), borderColor: '#14b8a6', backgroundColor: 'rgba(20,184,166,0.05)', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 },
+      { label: 'Net Home Equity', data: sim.years.map(y => y.netHomeEquity), borderColor: '#10b981', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2, borderDash: [4,2] },
+      { label: 'LOC Available', data: sim.years.map(y => y.locAvailable), borderColor: '#94a3b8', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 1.5 },
+      { label: 'RM Loan Balance', data: sim.years.map(y => y.loanBalance), borderColor: '#ec4899', backgroundColor: 'rgba(236,72,153,0.15)', fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2 }
+    ]},
+    options: baseOpts
+  });
+
+  charts.income = new Chart(document.getElementById('chartIncome'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Social Security', data: sim.years.map(y => y.ssIncome), backgroundColor: '#3b82f6' },
+      { label: 'FIA Income', data: sim.years.map(y => y.fiaIncome), backgroundColor: '#f59e0b' },
+      { label: 'RM Income', data: sim.years.map(y => y.rmIncome + y.rmBackstopDraw), backgroundColor: '#ec4899' },
+      { label: 'Portfolio Withdrawal', data: sim.years.map(y => y.netWithdrawal), backgroundColor: '#10b981' }
+    ]},
+    options: { ...stackedOpts, scales: { ...stackedOpts.scales, x: { ...stackedOpts.scales.x, stacked: true } }, plugins: { ...stackedOpts.plugins, legend: { display: true, position: 'bottom', labels: { color: tickColor, font: { size: 11 } } } } }
+  });
+
+  charts.spending = new Chart(document.getElementById('chartSpending'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Living Expenses', data: sim.years.map(y => y.livingExp), backgroundColor: '#8b5cf6' },
+      { label: 'Healthcare', data: sim.years.map(y => y.healthcare), backgroundColor: '#ef4444' }
+    ]},
+    options: { ...stackedOpts, scales: { ...stackedOpts.scales, x: { ...stackedOpts.scales.x, stacked: true } }, plugins: { ...stackedOpts.plugins, legend: { display: true, position: 'bottom', labels: { color: tickColor, font: { size: 11 } } } } }
+  });
+}
+
+function renderTables(sim) {
+  const tbS = document.getElementById('tableBodySummary');
+  const tbB = document.getElementById('tableBodyBuckets');
+  const tbR = document.getElementById('tableBodyRM');
+  const tfS = document.getElementById('tableFootSummary');
+  const tfB = document.getElementById('tableFootBuckets');
+  tbS.innerHTML = ''; tbB.innerHTML = ''; tbR.innerHTML = '';
+  tfS.innerHTML = ''; tfB.innerHTML = '';
+
+  let totWith = 0, totSS = 0, totFiaInc = 0, totRMInc = 0, totNeed = 0;
+  let totB1G = 0, totB2G = 0, totB3G = 0, totFiaG = 0;
+
+  sim.years.forEach(y => {
+    let cls = '';
+    if (y.shortfall > 0) cls = 'row-bad';
+    else if (y.total <= 0) cls = 'row-warn';
+    if (y.rmIncome > 0 || y.rmBackstopDraw > 0) cls += ' row-rm';
+
+    const trS = document.createElement('tr'); trS.className = cls;
+    trS.innerHTML = `<td>${y.age}</td><td>${fmtFull(y.totalNeed)}</td><td>${fmtFull(y.ssIncome)}</td><td>${fmtFull(y.fiaIncome)}</td><td>${fmtFull(y.rmIncome + y.rmBackstopDraw)}</td><td>${fmtFull(y.netWithdrawal)}</td><td>${fmtFull(y.totalGain)}</td><td>${fmtFull(y.total)}</td><td>${fmtFull(y.netWorth)}</td>`;
+    tbS.appendChild(trS);
+
+    const trB = document.createElement('tr'); trB.className = cls;
+    trB.innerHTML = `<td>${y.age}</td><td>${fmtFull(y.b1)}</td><td>${fmtFull(y.b2)}</td><td>${fmtFull(y.b3)}</td><td>${fmtFull(y.fia)}</td><td>${fmtFull(y.b1Gain)}</td><td>${fmtFull(y.b2Gain)}</td><td>${fmtFull(y.b3Gain)}</td><td>${fmtFull(y.fiaGain)}</td><td>${fmtFull(y.totalGain)}</td><td>${fmtFull(y.netWithdrawal)}</td><td>${fmtFull(y.total)}</td><td>${fmtFull(y.realTotal)}</td>`;
+    tbB.appendChild(trB);
+
+    const trR = document.createElement('tr'); trR.className = cls;
+    trR.innerHTML = `<td>${y.age}</td><td>${fmtFull(y.homeValue)}</td><td>${fmtFull(y.locAvailable)}</td><td>${fmtFull(y.loanBalance)}</td><td>${fmtFull(y.rmIncome + y.rmBackstopDraw)}</td><td>${fmtFull(y.netHomeEquity)}</td><td>${y.status}</td>`;
+    tbR.appendChild(trR);
+
+    totWith += y.netWithdrawal; totSS += y.ssIncome; totFiaInc += y.fiaIncome;
+    totRMInc += y.rmIncome + y.rmBackstopDraw; totNeed += y.totalNeed;
+    totB1G += y.b1Gain; totB2G += y.b2Gain; totB3G += y.b3Gain; totFiaG += y.fiaGain;
+  });
+
+  const last = sim.years[sim.years.length - 1];
+  const totGain = totB1G + totB2G + totB3G + totFiaG;
+
+  const footStyle = 'background:var(--bg2);font-weight:600;color:var(--text);border-top:2px solid var(--border);';
+  tfS.innerHTML = `<tr style="${footStyle}"><td>Totals / Final</td><td>${fmtFull(totNeed)}</td><td>${fmtFull(totSS)}</td><td>${fmtFull(totFiaInc)}</td><td>${fmtFull(totRMInc)}</td><td>${fmtFull(totWith)}</td><td>${fmtFull(totGain)}</td><td>${fmtFull(last.total)}</td><td>${fmtFull(last.netWorth)}</td></tr>`;
+  tfB.innerHTML = `<tr style="${footStyle}"><td>Totals / Final</td><td>${fmtFull(last.b1)}</td><td>${fmtFull(last.b2)}</td><td>${fmtFull(last.b3)}</td><td>${fmtFull(last.fia)}</td><td>${fmtFull(totB1G)}</td><td>${fmtFull(totB2G)}</td><td>${fmtFull(totB3G)}</td><td>${fmtFull(totFiaG)}</td><td>${fmtFull(totGain)}</td><td>${fmtFull(totWith)}</td><td>${fmtFull(last.total)}</td><td>${fmtFull(last.realTotal)}</td></tr>`;
+}
+
+function checkAllocation(s) {
+  const total = s.bucket1Pct + s.bucket2Pct + s.bucket3Pct + s.fiaPct;
+  const warn = document.getElementById('allocWarn');
+  if (Math.abs(total - 100) > 0.5) {
+    warn.classList.add('show');
+    warn.textContent = `⚠ Allocations total ${total.toFixed(1)}% — should sum to 100%`;
+  } else { warn.classList.remove('show'); }
+}
+
+function updateSummary(s, sim) {
+  const last = sim.years[sim.years.length - 1];
+  const first = sim.years[0];
+
+  const survEl = document.getElementById('metricSurvival');
+  const everShortfall = sim.years.some(y => y.shortfall > 0);
+
+  if (everShortfall) {
+    const shortAge = sim.years.find(y => y.shortfall > 0).age;
+    survEl.className = 'metric bad';
+    survEl.querySelector('.value').textContent = `Age ${shortAge}`;
+    survEl.querySelector('.sub').textContent = `funds short, ${s.lifeExpectancy - shortAge} yrs early`;
+  } else if (last.netWorth < last.totalNeed * 3) {
+    survEl.className = 'metric warn';
+    survEl.querySelector('.value').textContent = `Age ${s.lifeExpectancy}`;
+    survEl.querySelector('.sub').textContent = sim.firstRMDrawAge ? `RM held it together` : `tight margin`;
+  } else {
+    survEl.className = 'metric good';
+    survEl.querySelector('.value').textContent = `Age ${s.lifeExpectancy}+`;
+    survEl.querySelector('.sub').textContent = sim.firstRMDrawAge ? `RM extended plan` : `comfortable margin`;
+  }
+
+  const swr = first.netWithdrawal / s.liquidAssets * 100;
+  document.getElementById('metricSWR').textContent = swr.toFixed(2) + '%';
+
+  document.getElementById('metricRMDrawn').textContent = fmt(last.loanBalance);
+  if (sim.firstRMDrawAge) {
+    document.getElementById('metricRMDrawnSub').textContent = `first draw at age ${sim.firstRMDrawAge}`;
+  } else if (sim.rmActivatedAge) {
+    document.getElementById('metricRMDrawnSub').textContent = `LOC opened, never drawn`;
+  } else {
+    document.getElementById('metricRMDrawnSub').textContent = `RM not used`;
+  }
+
+  const legacy = last.netHomeEquity + last.total + s.otherPhysical;
+  document.getElementById('metricLegacy').textContent = fmt(legacy);
+  document.getElementById('metricLegacySub').textContent = `eq ${fmt(last.netHomeEquity)} + liq ${fmt(last.total)} + phys ${fmt(s.otherPhysical)}`;
+
+  document.getElementById('metricEnding').textContent = fmt(last.total);
+  document.getElementById('metricEndingSub').textContent = `real: ${fmt(last.realTotal)}`;
+
+  const succ = document.getElementById('successBanner');
+  const dep = document.getElementById('depletedBanner');
+  const rm = document.getElementById('rmBanner');
+  succ.classList.remove('show'); dep.classList.remove('show'); rm.classList.remove('show');
+
+  if (everShortfall) {
+    const shortAge = sim.years.find(y => y.shortfall > 0).age;
+    dep.classList.add('show');
+    dep.textContent = `⚠ Funds run short at age ${shortAge} — even with RM strategy. Reduce spending, delay retirement, increase home value, or change strategy.`;
+  } else if (sim.firstRMDrawAge) {
+    rm.classList.add('show');
+    rm.textContent = `ℹ Reverse mortgage activated at age ${sim.firstRMDrawAge}. Loan balance at end: ${fmt(last.loanBalance)}, leaving ${fmt(last.netHomeEquity)} home equity for legacy.`;
+  } else if (last.netWorth > s.liquidAssets) {
+    succ.classList.add('show');
+    const locMsg = sim.rmActivatedAge ? `LOC of ${fmt(last.locAvailable)} remained as unused safety net.` : `Home equity preserved as safety net.`;
+    succ.textContent = `✓ Plan survives without tapping reverse mortgage. ${locMsg}`;
+  }
+}
+
+function recalc() {
+  const s = readState();
+  checkAllocation(s);
+  const sim = simulate(s);
+  updateSummary(s, sim);
+  renderCharts(sim);
+  renderTables(sim);
+}
+
+function randn() {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function runMonteCarlo() {
+  const s = readState();
+  const trials = 1000;
+  const years = s.lifeExpectancy - s.retirementAge + 1;
+  // Volatilities (annualized stdev) — typical asset-class assumptions
+  const sig = { b1: 0.01, b2: 0.06, b3: 0.18, fia: 0.0 };
+  // Sequence-of-returns stress: bias the first 5 years downward
+  const stressYears = 5;
+  const stressDrag = { b1: 0.005, b2: 0.04, b3: 0.10, fia: 0 };
+
+  const successFlags = [];
+  const endingPortfolios = [];
+  const endingNetWorths = [];
+  const failAges = [];
+  const portfolioPaths = [];
+
+  for (let t = 0; t < trials; t++) {
+    const returnsByYear = [];
+    for (let y = 0; y < years; y++) {
+      const drag = y < stressYears ? 1 : 0;
+      returnsByYear.push({
+        b1: s.bucket1Return/100 - drag * stressDrag.b1 + sig.b1 * randn(),
+        b2: s.bucket2Return/100 - drag * stressDrag.b2 + sig.b2 * randn(),
+        b3: s.bucket3Return/100 - drag * stressDrag.b3 + sig.b3 * randn(),
+        fia: s.fiaReturn/100 + sig.fia * randn(),
+      });
+    }
+    const sim = simulate(s, returnsByYear);
+    const last = sim.years[sim.years.length - 1];
+    const everShort = sim.years.some(y => y.shortfall > 0);
+    successFlags.push(!everShort);
+    endingPortfolios.push(last.total);
+    endingNetWorths.push(last.netWorth);
+    if (everShort) failAges.push(sim.years.find(y => y.shortfall > 0).age);
+    portfolioPaths.push(sim.years.map(y => y.total));
+  }
+
+  const successRate = successFlags.filter(Boolean).length / trials * 100;
+  const sortedPort = [...endingPortfolios].sort((a,b) => a-b);
+  const sortedNW = [...endingNetWorths].sort((a,b) => a-b);
+  const pct = (arr, p) => arr[Math.floor((arr.length - 1) * p)];
+  const medFail = failAges.length ? failAges.sort((a,b)=>a-b)[Math.floor(failAges.length/2)] : null;
+
+  // Render percentile bands chart
+  const labels = [];
+  for (let age = s.retirementAge; age <= s.lifeExpectancy; age++) labels.push(age);
+  const p10 = [], p50 = [], p90 = [];
+  for (let y = 0; y < years; y++) {
+    const col = portfolioPaths.map(p => p[y]).sort((a,b)=>a-b);
+    p10.push(col[Math.floor(0.10 * (trials-1))]);
+    p50.push(col[Math.floor(0.50 * (trials-1))]);
+    p90.push(col[Math.floor(0.90 * (trials-1))]);
+  }
+
+  if (charts.mc) charts.mc.destroy();
+  document.getElementById('mcPanel').style.display = 'block';
+  const tickColor = '#94a3b8';
+  const gridColor = 'rgba(148, 163, 184, 0.08)';
+  charts.mc = new Chart(document.getElementById('chartMC'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: '90th %ile', data: p90, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.10)', fill: '+1', tension: 0.2, pointRadius: 0, borderWidth: 1.5 },
+      { label: 'Median',    data: p50, borderColor: '#3b82f6', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 },
+      { label: '10th %ile', data: p10, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.10)', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 1.5 }
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: tickColor, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 12 } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, callback: (v) => fmt(v) } }
+      }
+    }
+  });
+
+  document.getElementById('mcStats').innerHTML = `
+    <div class="metric"><div class="label">Success Rate</div><div class="value" style="color:${successRate>=90?'var(--green)':successRate>=75?'var(--yellow)':'var(--red)'}">${successRate.toFixed(1)}%</div><div class="sub">${trials} scenarios, 5-yr early-downturn stress</div></div>
+    <div class="metric"><div class="label">Median Ending Portfolio</div><div class="value">${fmt(pct(sortedPort,0.50))}</div><div class="sub">10th: ${fmt(pct(sortedPort,0.10))} · 90th: ${fmt(pct(sortedPort,0.90))}</div></div>
+    <div class="metric"><div class="label">Median Ending Net Worth</div><div class="value">${fmt(pct(sortedNW,0.50))}</div><div class="sub">10th: ${fmt(pct(sortedNW,0.10))} · 90th: ${fmt(pct(sortedNW,0.90))}</div></div>
+    <div class="metric"><div class="label">Median Failure Age</div><div class="value">${medFail ? 'Age '+medFail : '—'}</div><div class="sub">${failAges.length} of ${trials} runs ran short</div></div>
+  `;
+}
+
+function findSustainable() {
+  const s = readState();
+  let lo = 10000, hi = 200000, best = lo;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    const test = { ...s, baseSpending: mid };
+    const sim = simulate(test);
+    const everShort = sim.years.some(y => y.shortfall > 0);
+    const last = sim.years[sim.years.length - 1];
+    if (!everShort && last.netHomeEquity > 0) { best = mid; lo = mid; }
+    else { hi = mid; }
+  }
+  document.getElementById('baseSpending').value = Math.floor(best / 500) * 500;
+  recalc();
+  const banner = document.getElementById('successBanner');
+  banner.classList.add('show');
+  banner.textContent = `✓ Solved: max sustainable living-expense budget is ~${fmt(best)}/yr (today's $) given current allocation, returns, SS, and RM strategy.`;
+}
+
+function switchTab(btn, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+
+function applyPreset(name) {
+  const base = {
+    currentAge:55, retirementAge:60, lifeExpectancy:95,
+    liquidAssets:1000000,
+    homeValue:300000, mortgageBalance:0, homeAppreciation:1.0, otherPhysical:50000,
+    hecmAge:62, hecmRate:6.5, rmTenureStart:65,
+    baseSpending:42000, preMedicareHealthcare:18000, medicareCost:12000, inflation:3.0,
+    ssAmount:36000, ssStartAge:62, ssCola:2.5,
+    bucket1Pct:10, bucket2Pct:30, bucket3Pct:60, fiaPct:0,
+    bucket1Return:3.0, bucket2Return:4.0, bucket3Return:6.0, fiaReturn:5.0,
+    fiaIncomeStart:65, fiaIncomeRate:5.5, fiaRollup:6.0,
+    bucket1Years:2, bucket2Years:5,
+    fiaIncomeRider:false, rmStrategy:'loc-backstop'
+  };
+  const presets = {
+    user: { ...base, rmStrategy:'off' },
+    'rm-backstop': { ...base, rmStrategy:'loc-backstop' },
+    'rm-tenure': { ...base, rmStrategy:'tenure', rmTenureStart:65, baseSpending:50000 },
+    'fia-rm': { ...base, fiaPct:25, bucket3Pct:35, fiaIncomeRider:true, rmStrategy:'loc-backstop' },
+    conservative: { ...base, lifeExpectancy:95, baseSpending:50000, bucket1Pct:15, bucket2Pct:45, bucket3Pct:40, bucket1Years:3, bucket2Years:7, rmStrategy:'loc-backstop' }
+  };
+  const p = presets[name];
+  if (!p) return;
+  Object.entries(p).forEach(([k,v]) => {
+    const el = document.getElementById(k);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = v;
+    else el.value = v;
+  });
+  recalc();
+}
+
+inputIds.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', recalc);
+});
+document.getElementById('fiaIncomeRider').addEventListener('change', recalc);
+document.getElementById('rmStrategy').addEventListener('change', recalc);
+
+recalc();
+</script>
+</body>
+</html>
