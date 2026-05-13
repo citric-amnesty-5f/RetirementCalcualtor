@@ -160,6 +160,19 @@ footer {
         <div class="field"><label>Match cap % <span class="hint">% of salary employer matches up to</span></label><input type="number" id="employerMatchCap" value="6" step="0.5"></div>
         <div class="field"><label>Salary growth %</label><input type="number" id="salaryGrowth" value="3.0" step="0.1"></div>
         <div class="field"><label>Pre-retirement return %</label><input type="number" id="preRetReturn" value="7.0" step="0.1"></div>
+        <div class="field">
+          <label>Downturn scenario <span class="hint">stress-test accumulation</span></label>
+          <select id="accumDownturn">
+            <option value="none" selected>None (baseline)</option>
+            <option value="mild">Mild recession (1 yr, -20%)</option>
+            <option value="gfc">2008-style crash (-37% then +26% rebound)</option>
+            <option value="lost-decade">Lost decade (10 yrs @ 1%)</option>
+            <option value="late-crash">Late-career crash (-30% 3 yrs pre-retirement)</option>
+            <option value="early-crash">Early-career crash (-35% in first 2 yrs)</option>
+            <option value="stagflation">Stagflation (5 yrs @ -2% real, flat nominal)</option>
+          </select>
+        </div>
+        <div class="field"><label>Downturn start age <span class="hint">for mild / GFC / lost-decade</span></label><input type="number" id="downturnStartAge" value="40"></div>
       </div>
 
       <div class="section">
@@ -267,6 +280,11 @@ footer {
       </div>
     </div>
 
+    <div class="panel" id="accumChartPanel" style="margin-bottom: 16px; display: none;">
+      <h2>Accumulation Trajectory (Pre-Retirement)</h2>
+      <div class="chart-wrap tall"><canvas id="chartAccum"></canvas></div>
+    </div>
+
     <div class="panel" id="mcPanel" style="margin-bottom: 16px; display: none;">
       <h2>Monte Carlo — 1000 Scenarios (with early-downturn stress)</h2>
       <div class="summary-grid" id="mcStats" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 14px;"></div>
@@ -369,7 +387,7 @@ footer {
 <script>
 const inputIds = [
   'currentAge','retirementAge','lifeExpectancy','liquidAssets',
-  'annualSalary','employeeContribPct','employerMatchRate','employerMatchCap','salaryGrowth','preRetReturn',
+  'annualSalary','employeeContribPct','employerMatchRate','employerMatchCap','salaryGrowth','preRetReturn','downturnStartAge',
   'homeValue','mortgageBalance','homeAppreciation','otherPhysical',
   'hecmAge','hecmRate','rmTenureStart',
   'baseSpending','preMedicareHealthcare','medicareCost','inflation',
@@ -385,6 +403,7 @@ function readState() {
   inputIds.forEach(id => s[id] = parseFloat(document.getElementById(id).value) || 0);
   s.fiaIncomeRider = document.getElementById('fiaIncomeRider').checked;
   s.rmStrategy = document.getElementById('rmStrategy').value;
+  s.accumDownturn = document.getElementById('accumDownturn').value;
   return s;
 }
 
@@ -396,25 +415,70 @@ function fmt(n) {
 }
 function fmtFull(n) { if (!isFinite(n)) return '—'; return '$' + Math.round(n).toLocaleString(); }
 
-function projectAccumulation(s) {
+function buildDownturnReturns(s) {
+  // Returns an array of overridden annual returns (decimal) keyed by year offset
+  // from currentAge. null = use baseline preRetReturn.
+  const yrs = s.retirementAge - s.currentAge;
+  const overrides = new Array(yrs).fill(null);
+  if (s.accumDownturn === 'none' || yrs <= 0) return overrides;
+  const baseR = s.preRetReturn / 100;
+  const startOffset = Math.max(0, Math.min(yrs - 1, s.downturnStartAge - s.currentAge));
+  const preRetOffset = (age) => Math.max(0, Math.min(yrs - 1, age - s.currentAge));
+  switch (s.accumDownturn) {
+    case 'mild':
+      overrides[startOffset] = -0.20;
+      break;
+    case 'gfc':
+      if (startOffset < yrs) overrides[startOffset] = -0.37;
+      if (startOffset + 1 < yrs) overrides[startOffset + 1] = 0.26;
+      break;
+    case 'lost-decade':
+      for (let i = 0; i < 10 && startOffset + i < yrs; i++) {
+        overrides[startOffset + i] = 0.01;
+      }
+      break;
+    case 'late-crash': {
+      // 3 yrs before retirement: -30% then mild recovery
+      const lateStart = Math.max(0, yrs - 3);
+      overrides[lateStart] = -0.30;
+      if (lateStart + 1 < yrs) overrides[lateStart + 1] = 0.05;
+      if (lateStart + 2 < yrs) overrides[lateStart + 2] = 0.08;
+      break;
+    }
+    case 'early-crash':
+      overrides[0] = -0.20;
+      if (1 < yrs) overrides[1] = -0.18;
+      break;
+    case 'stagflation':
+      for (let i = 0; i < 5 && startOffset + i < yrs; i++) {
+        overrides[startOffset + i] = 0.00;
+      }
+      break;
+  }
+  return overrides;
+}
+
+function projectAccumulation(s, returnOverrides) {
   const years = [];
   if (s.currentAge >= s.retirementAge) {
     return { years, balanceAtRetirement: s.liquidAssets, accumulated: false };
   }
   let balance = s.liquidAssets;
   let salary = s.annualSalary;
-  const r = s.preRetReturn / 100;
+  const baseR = s.preRetReturn / 100;
   const g = s.salaryGrowth / 100;
   for (let age = s.currentAge; age < s.retirementAge; age++) {
+    const yo = age - s.currentAge;
+    const r = (returnOverrides && returnOverrides[yo] !== null) ? returnOverrides[yo] : baseR;
     const empContrib = salary * s.employeeContribPct / 100;
     const matchedPct = Math.min(s.employeeContribPct, s.employerMatchCap);
     const emplMatch = salary * matchedPct / 100 * s.employerMatchRate / 100;
     const totalContrib = empContrib + emplMatch;
     const startBalance = balance;
     const ret = (startBalance + totalContrib / 2) * r;  // mid-year contribution approximation
-    balance = startBalance + totalContrib + ret;
+    balance = Math.max(0, startBalance + totalContrib + ret);
     years.push({
-      age, salary, empContrib, emplMatch, totalContrib, ret,
+      age, salary, empContrib, emplMatch, totalContrib, ret, returnPct: r * 100,
       endBalance: balance
     });
     salary *= (1 + g);
@@ -781,20 +845,23 @@ function updateSummary(s, sim) {
 function recalc() {
   const s = readState();
   checkAllocation(s);
-  const accum = projectAccumulation(s);
+  const baselineAccum = projectAccumulation(s, null);
+  const overrides = buildDownturnReturns(s);
+  const downturnApplied = s.accumDownturn !== 'none' && overrides.some(v => v !== null);
+  const accum = downturnApplied ? projectAccumulation(s, overrides) : baselineAccum;
   s.startingBalance = accum.balanceAtRetirement;
   s.accumulation = accum;
+  s.baselineAccumulation = baselineAccum;
   const sim = simulate(s);
   updateSummary(s, sim);
   renderCharts(sim);
   renderTables(sim);
-  renderAccumulation(s, accum);
+  renderAccumulation(s, accum, baselineAccum, downturnApplied);
 }
 
-function renderAccumulation(s, accum) {
+function renderAccumulation(s, accum, baseline, downturnApplied) {
   const banner = document.getElementById('accumBanner');
   const tabBtn = document.getElementById('tabBtnAccum');
-  const metric = document.getElementById('metricStartBalance');
   const tbA = document.getElementById('tableBodyAccum');
   const tfA = document.getElementById('tableFootAccum');
 
@@ -806,28 +873,74 @@ function renderAccumulation(s, accum) {
     }
     document.getElementById('metricStartBalanceVal').textContent = fmt(s.liquidAssets);
     document.getElementById('metricStartBalanceSub').textContent = 'current (already retired path)';
+    document.getElementById('accumChartPanel').style.display = 'none';
     return;
   }
 
   tabBtn.style.display = '';
   const yearsToRet = s.retirementAge - s.currentAge;
   banner.classList.add('show');
-  banner.textContent = `Accumulation phase: ${yearsToRet} yrs from age ${s.currentAge} → ${s.retirementAge}. Current ${fmt(s.liquidAssets)} grows to ${fmt(accum.balanceAtRetirement)} at retirement (today's $: ${fmt(accum.balanceAtRetirement / Math.pow(1 + s.inflation/100, yearsToRet))}). Withdrawal phase below uses the projected balance as the starting point.`;
+  const realBal = accum.balanceAtRetirement / Math.pow(1 + s.inflation/100, yearsToRet);
+  let bannerText = `Accumulation: ${yearsToRet} yrs, age ${s.currentAge} → ${s.retirementAge}. ${fmt(s.liquidAssets)} grows to ${fmt(accum.balanceAtRetirement)} nominal (${fmt(realBal)} today's $).`;
+  if (downturnApplied) {
+    const delta = accum.balanceAtRetirement - baseline.balanceAtRetirement;
+    const pctDelta = baseline.balanceAtRetirement > 0 ? (delta / baseline.balanceAtRetirement * 100) : 0;
+    bannerText += ` Downturn impact: ${fmt(delta)} (${pctDelta.toFixed(1)}%) vs baseline ${fmt(baseline.balanceAtRetirement)}.`;
+  }
+  banner.textContent = bannerText;
 
   document.getElementById('metricStartBalanceVal').textContent = fmt(accum.balanceAtRetirement);
-  document.getElementById('metricStartBalanceSub').textContent = `from ${fmt(s.liquidAssets)} + ${yearsToRet}yr contributions`;
+  document.getElementById('metricStartBalanceSub').textContent = downturnApplied
+    ? `${fmt(baseline.balanceAtRetirement)} baseline · downturn applied`
+    : `from ${fmt(s.liquidAssets)} + ${yearsToRet}yr contributions`;
 
   tbA.innerHTML = '';
   let totEmp = 0, totMatch = 0, totRet = 0;
-  accum.years.forEach(y => {
+  accum.years.forEach((y, i) => {
+    const baselineY = baseline.years[i];
+    const isShock = downturnApplied && baselineY && Math.abs(y.returnPct - baselineY.returnPct) > 0.01;
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${y.age}</td><td>${fmtFull(y.salary)}</td><td>${fmtFull(y.empContrib)}</td><td>${fmtFull(y.emplMatch)}</td><td>${fmtFull(y.totalContrib)}</td><td>${fmtFull(y.ret)}</td><td>${fmtFull(y.endBalance)}</td>`;
+    if (isShock) tr.className = 'row-bad';
+    tr.innerHTML = `<td>${y.age}${isShock ? ' ⚠' : ''}</td><td>${fmtFull(y.salary)}</td><td>${fmtFull(y.empContrib)}</td><td>${fmtFull(y.emplMatch)}</td><td>${fmtFull(y.totalContrib)}</td><td>${fmtFull(y.ret)}${isShock ? ' ('+y.returnPct.toFixed(1)+'%)' : ''}</td><td>${fmtFull(y.endBalance)}</td>`;
     tbA.appendChild(tr);
     totEmp += y.empContrib; totMatch += y.emplMatch; totRet += y.ret;
   });
   const footStyle = 'background:var(--bg2);font-weight:600;color:var(--text);border-top:2px solid var(--border);';
   const last = accum.years[accum.years.length - 1];
   tfA.innerHTML = `<tr style="${footStyle}"><td>Totals</td><td>—</td><td>${fmtFull(totEmp)}</td><td>${fmtFull(totMatch)}</td><td>${fmtFull(totEmp + totMatch)}</td><td>${fmtFull(totRet)}</td><td>${fmtFull(last.endBalance)}</td></tr>`;
+
+  renderAccumChart(accum, baseline, downturnApplied);
+}
+
+function renderAccumChart(accum, baseline, downturnApplied) {
+  const panel = document.getElementById('accumChartPanel');
+  panel.style.display = '';
+  if (charts.accum) charts.accum.destroy();
+  const labels = accum.years.map(y => y.age);
+  const tickColor = '#94a3b8';
+  const gridColor = 'rgba(148, 163, 184, 0.08)';
+  const datasets = [
+    { label: 'Scenario balance', data: accum.years.map(y => y.endBalance), borderColor: downturnApplied ? '#ef4444' : '#10b981', backgroundColor: downturnApplied ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)', fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2 }
+  ];
+  if (downturnApplied) {
+    datasets.unshift({ label: 'Baseline', data: baseline.years.map(y => y.endBalance), borderColor: '#3b82f6', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2, borderDash: [5, 4] });
+  }
+  charts.accum = new Chart(document.getElementById('chartAccum'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: tickColor, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 12 } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, callback: (v) => fmt(v) } }
+      }
+    }
+  });
 }
 
 function randn() {
@@ -954,7 +1067,7 @@ function applyPreset(name) {
   const base = {
     currentAge:55, retirementAge:60, lifeExpectancy:95,
     liquidAssets:1000000,
-    annualSalary:120000, employeeContribPct:10, employerMatchRate:50, employerMatchCap:6, salaryGrowth:3.0, preRetReturn:7.0,
+    annualSalary:120000, employeeContribPct:10, employerMatchRate:50, employerMatchCap:6, salaryGrowth:3.0, preRetReturn:7.0, downturnStartAge:40, accumDownturn:'none',
     homeValue:300000, mortgageBalance:0, homeAppreciation:1.0, otherPhysical:50000,
     hecmAge:62, hecmRate:6.5, rmTenureStart:65,
     baseSpending:42000, preMedicareHealthcare:18000, medicareCost:12000, inflation:3.0,
@@ -982,6 +1095,8 @@ function applyPreset(name) {
     if (el.type === 'checkbox') el.checked = v;
     else el.value = v;
   });
+  if (p.rmStrategy !== undefined) document.getElementById('rmStrategy').value = p.rmStrategy;
+  if (p.accumDownturn !== undefined) document.getElementById('accumDownturn').value = p.accumDownturn;
   recalc();
 }
 
@@ -991,6 +1106,7 @@ inputIds.forEach(id => {
 });
 document.getElementById('fiaIncomeRider').addEventListener('change', recalc);
 document.getElementById('rmStrategy').addEventListener('change', recalc);
+document.getElementById('accumDownturn').addEventListener('change', recalc);
 
 recalc();
 </script>
