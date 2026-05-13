@@ -44,7 +44,7 @@ select { text-align: left; cursor: pointer; }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .field.check { grid-template-columns: 24px 1fr; }
-.summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+.summary-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
 @media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
 .metric { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
 .metric .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 6px; }
@@ -132,6 +132,8 @@ footer {
       </div>
       <div class="preset-row">
         <button class="preset-btn" onclick="applyPreset('user')">Your Scenario</button>
+        <button class="preset-btn" onclick="applyPreset('accumulator-30')">Accumulator (30)</button>
+        <button class="preset-btn" onclick="applyPreset('accumulator-45')">Accumulator (45)</button>
         <button class="preset-btn" onclick="applyPreset('rm-backstop')">RM Backstop</button>
         <button class="preset-btn" onclick="applyPreset('rm-tenure')">RM Tenure</button>
         <button class="preset-btn" onclick="applyPreset('fia-rm')">FIA + RM Combo</button>
@@ -146,8 +148,18 @@ footer {
       </div>
 
       <div class="section">
-        <h2>Liquid Assets</h2>
-        <div class="field"><label>Total liquid <span class="hint">401k, IRA, brokerage</span></label><input type="number" id="liquidAssets" value="1000000" step="10000"></div>
+        <h2>Liquid Assets (today)</h2>
+        <div class="field"><label>Current balance <span class="hint">401k, IRA, brokerage — today</span></label><input type="number" id="liquidAssets" value="1000000" step="10000"></div>
+      </div>
+
+      <div class="section">
+        <h2>Accumulation Phase <span class="hint" style="font-size:11px;display:block;color:var(--text-faint);text-transform:none;letter-spacing:0;font-weight:400;">used only if current age &lt; retirement age</span></h2>
+        <div class="field"><label>Annual salary <span class="hint">today's $</span></label><input type="number" id="annualSalary" value="120000" step="5000"></div>
+        <div class="field"><label>Employee contribution % <span class="hint">of salary</span></label><input type="number" id="employeeContribPct" value="10" step="0.5"></div>
+        <div class="field"><label>Employer match % <span class="hint">of employee contribution</span></label><input type="number" id="employerMatchRate" value="50" step="5"></div>
+        <div class="field"><label>Match cap % <span class="hint">% of salary employer matches up to</span></label><input type="number" id="employerMatchCap" value="6" step="0.5"></div>
+        <div class="field"><label>Salary growth %</label><input type="number" id="salaryGrowth" value="3.0" step="0.1"></div>
+        <div class="field"><label>Pre-retirement return %</label><input type="number" id="preRetReturn" value="7.0" step="0.1"></div>
       </div>
 
       <div class="section">
@@ -222,9 +234,16 @@ footer {
     <div class="banner bad" id="depletedBanner"></div>
     <div class="banner info" id="rmBanner"></div>
 
+    <div class="banner info" id="accumBanner"></div>
+
     <div class="summary-grid">
       <div class="metric" id="metricSurvival">
         <div class="label">Plan Survives To</div><div class="value">—</div><div class="sub"></div>
+      </div>
+      <div class="metric" id="metricStartBalance">
+        <div class="label">Balance at Retirement</div>
+        <div class="value" id="metricStartBalanceVal">—</div>
+        <div class="sub" id="metricStartBalanceSub">projected</div>
       </div>
       <div class="metric">
         <div class="label">Initial Withdrawal</div>
@@ -296,6 +315,7 @@ footer {
         <button class="tab active" onclick="switchTab(this, 'tab-summary')">Cash Flow</button>
         <button class="tab" onclick="switchTab(this, 'tab-buckets')">Bucket Balances</button>
         <button class="tab" onclick="switchTab(this, 'tab-rm')">Reverse Mortgage</button>
+        <button class="tab" id="tabBtnAccum" onclick="switchTab(this, 'tab-accum')" style="display:none;">Accumulation</button>
       </div>
       <div class="tab-content active" id="tab-summary">
         <div class="table-wrap">
@@ -312,6 +332,15 @@ footer {
             <thead><tr><th>Age</th><th>B1 Cash</th><th>B2 Bonds</th><th>B3 Stocks</th><th>FIA</th><th>B1 Ret</th><th>B2 Ret</th><th>B3 Ret</th><th>FIA Ret</th><th>Total Ret</th><th>Withdrawal</th><th>Total Liquid</th><th>Real (today $)</th></tr></thead>
             <tbody id="tableBodyBuckets"></tbody>
             <tfoot id="tableFootBuckets"></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="tab-content" id="tab-accum">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Age</th><th>Salary</th><th>Employee Contrib</th><th>Employer Match</th><th>Total Contrib</th><th>Return</th><th>End Balance</th></tr></thead>
+            <tbody id="tableBodyAccum"></tbody>
+            <tfoot id="tableFootAccum"></tfoot>
           </table>
         </div>
       </div>
@@ -340,6 +369,7 @@ footer {
 <script>
 const inputIds = [
   'currentAge','retirementAge','lifeExpectancy','liquidAssets',
+  'annualSalary','employeeContribPct','employerMatchRate','employerMatchCap','salaryGrowth','preRetReturn',
   'homeValue','mortgageBalance','homeAppreciation','otherPhysical',
   'hecmAge','hecmRate','rmTenureStart',
   'baseSpending','preMedicareHealthcare','medicareCost','inflation',
@@ -366,6 +396,32 @@ function fmt(n) {
 }
 function fmtFull(n) { if (!isFinite(n)) return '—'; return '$' + Math.round(n).toLocaleString(); }
 
+function projectAccumulation(s) {
+  const years = [];
+  if (s.currentAge >= s.retirementAge) {
+    return { years, balanceAtRetirement: s.liquidAssets, accumulated: false };
+  }
+  let balance = s.liquidAssets;
+  let salary = s.annualSalary;
+  const r = s.preRetReturn / 100;
+  const g = s.salaryGrowth / 100;
+  for (let age = s.currentAge; age < s.retirementAge; age++) {
+    const empContrib = salary * s.employeeContribPct / 100;
+    const matchedPct = Math.min(s.employeeContribPct, s.employerMatchCap);
+    const emplMatch = salary * matchedPct / 100 * s.employerMatchRate / 100;
+    const totalContrib = empContrib + emplMatch;
+    const startBalance = balance;
+    const ret = (startBalance + totalContrib / 2) * r;  // mid-year contribution approximation
+    balance = startBalance + totalContrib + ret;
+    years.push({
+      age, salary, empContrib, emplMatch, totalContrib, ret,
+      endBalance: balance
+    });
+    salary *= (1 + g);
+  }
+  return { years, balanceAtRetirement: balance, accumulated: true };
+}
+
 function plf(age) {
   if (age < 62) return 0;
   return Math.min(0.75, 0.41 + 0.0095 * (age - 62));
@@ -380,10 +436,11 @@ function tenureAnnual(principalLimit, age, hecmRate) {
 
 function simulate(s, returnsByYear) {
   const years = [];
-  let b1 = s.liquidAssets * s.bucket1Pct / 100;
-  let b2 = s.liquidAssets * s.bucket2Pct / 100;
-  let b3 = s.liquidAssets * s.bucket3Pct / 100;
-  let fia = s.liquidAssets * s.fiaPct / 100;
+  const startBalance = (s.startingBalance !== undefined) ? s.startingBalance : s.liquidAssets;
+  let b1 = startBalance * s.bucket1Pct / 100;
+  let b2 = startBalance * s.bucket2Pct / 100;
+  let b3 = startBalance * s.bucket3Pct / 100;
+  let fia = startBalance * s.fiaPct / 100;
   let fiaIncomeBase = fia;
 
   let homeValue = s.homeValue;
@@ -682,7 +739,8 @@ function updateSummary(s, sim) {
     survEl.querySelector('.sub').textContent = sim.firstRMDrawAge ? `RM extended plan` : `comfortable margin`;
   }
 
-  const swr = first.netWithdrawal / s.liquidAssets * 100;
+  const startBal = (s.startingBalance !== undefined) ? s.startingBalance : s.liquidAssets;
+  const swr = startBal > 0 ? first.netWithdrawal / startBal * 100 : 0;
   document.getElementById('metricSWR').textContent = swr.toFixed(2) + '%';
 
   document.getElementById('metricRMDrawn').textContent = fmt(last.loanBalance);
@@ -723,10 +781,53 @@ function updateSummary(s, sim) {
 function recalc() {
   const s = readState();
   checkAllocation(s);
+  const accum = projectAccumulation(s);
+  s.startingBalance = accum.balanceAtRetirement;
+  s.accumulation = accum;
   const sim = simulate(s);
   updateSummary(s, sim);
   renderCharts(sim);
   renderTables(sim);
+  renderAccumulation(s, accum);
+}
+
+function renderAccumulation(s, accum) {
+  const banner = document.getElementById('accumBanner');
+  const tabBtn = document.getElementById('tabBtnAccum');
+  const metric = document.getElementById('metricStartBalance');
+  const tbA = document.getElementById('tableBodyAccum');
+  const tfA = document.getElementById('tableFootAccum');
+
+  if (!accum.accumulated) {
+    banner.classList.remove('show');
+    tabBtn.style.display = 'none';
+    if (document.getElementById('tab-accum').classList.contains('active')) {
+      document.querySelector('.tab[onclick*="tab-summary"]').click();
+    }
+    document.getElementById('metricStartBalanceVal').textContent = fmt(s.liquidAssets);
+    document.getElementById('metricStartBalanceSub').textContent = 'current (already retired path)';
+    return;
+  }
+
+  tabBtn.style.display = '';
+  const yearsToRet = s.retirementAge - s.currentAge;
+  banner.classList.add('show');
+  banner.textContent = `Accumulation phase: ${yearsToRet} yrs from age ${s.currentAge} → ${s.retirementAge}. Current ${fmt(s.liquidAssets)} grows to ${fmt(accum.balanceAtRetirement)} at retirement (today's $: ${fmt(accum.balanceAtRetirement / Math.pow(1 + s.inflation/100, yearsToRet))}). Withdrawal phase below uses the projected balance as the starting point.`;
+
+  document.getElementById('metricStartBalanceVal').textContent = fmt(accum.balanceAtRetirement);
+  document.getElementById('metricStartBalanceSub').textContent = `from ${fmt(s.liquidAssets)} + ${yearsToRet}yr contributions`;
+
+  tbA.innerHTML = '';
+  let totEmp = 0, totMatch = 0, totRet = 0;
+  accum.years.forEach(y => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${y.age}</td><td>${fmtFull(y.salary)}</td><td>${fmtFull(y.empContrib)}</td><td>${fmtFull(y.emplMatch)}</td><td>${fmtFull(y.totalContrib)}</td><td>${fmtFull(y.ret)}</td><td>${fmtFull(y.endBalance)}</td>`;
+    tbA.appendChild(tr);
+    totEmp += y.empContrib; totMatch += y.emplMatch; totRet += y.ret;
+  });
+  const footStyle = 'background:var(--bg2);font-weight:600;color:var(--text);border-top:2px solid var(--border);';
+  const last = accum.years[accum.years.length - 1];
+  tfA.innerHTML = `<tr style="${footStyle}"><td>Totals</td><td>—</td><td>${fmtFull(totEmp)}</td><td>${fmtFull(totMatch)}</td><td>${fmtFull(totEmp + totMatch)}</td><td>${fmtFull(totRet)}</td><td>${fmtFull(last.endBalance)}</td></tr>`;
 }
 
 function randn() {
@@ -853,6 +954,7 @@ function applyPreset(name) {
   const base = {
     currentAge:55, retirementAge:60, lifeExpectancy:95,
     liquidAssets:1000000,
+    annualSalary:120000, employeeContribPct:10, employerMatchRate:50, employerMatchCap:6, salaryGrowth:3.0, preRetReturn:7.0,
     homeValue:300000, mortgageBalance:0, homeAppreciation:1.0, otherPhysical:50000,
     hecmAge:62, hecmRate:6.5, rmTenureStart:65,
     baseSpending:42000, preMedicareHealthcare:18000, medicareCost:12000, inflation:3.0,
@@ -865,6 +967,8 @@ function applyPreset(name) {
   };
   const presets = {
     user: { ...base, rmStrategy:'off' },
+    'accumulator-30': { ...base, currentAge:30, retirementAge:65, lifeExpectancy:95, liquidAssets:50000, annualSalary:90000, employeeContribPct:10, employerMatchRate:100, employerMatchCap:6, salaryGrowth:3.0, preRetReturn:7.5, baseSpending:55000, ssAmount:32000, rmStrategy:'off' },
+    'accumulator-45': { ...base, currentAge:45, retirementAge:65, lifeExpectancy:95, liquidAssets:250000, annualSalary:140000, employeeContribPct:12, employerMatchRate:50, employerMatchCap:6, salaryGrowth:3.0, preRetReturn:7.0, baseSpending:60000, ssAmount:36000, rmStrategy:'off' },
     'rm-backstop': { ...base, rmStrategy:'loc-backstop' },
     'rm-tenure': { ...base, rmStrategy:'tenure', rmTenureStart:65, baseSpending:50000 },
     'fia-rm': { ...base, fiaPct:25, bucket3Pct:35, fiaIncomeRider:true, rmStrategy:'loc-backstop' },
